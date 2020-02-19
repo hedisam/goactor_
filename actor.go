@@ -1,0 +1,194 @@
+package goactor
+
+import (
+	"fmt"
+	"sync/atomic"
+)
+
+const (
+	actor_trap_exit_yes	int32 = iota
+	actor_trap_exit_no
+)
+
+type ActorFunc func(actor *Actor)
+
+type Actor struct {
+	*Context
+	trapExit   		int32
+	// actors that are linked to me. two way communication
+	linkedActors 	map[string]*Actor
+	// actors that are monitoring me. one way communication
+	monitorActors	map[string]*Actor
+}
+
+func newActor(ctx *Context) *Actor {
+	return &Actor{
+		Context: 		ctx,
+		trapExit: 		actor_trap_exit_no,
+		linkedActors: 	make(map[string]*Actor),
+		monitorActors: 	make(map[string]*Actor),
+	}
+}
+
+func (actor *Actor) linkTo(linkedActor *Actor) *Actor {
+	actor.linkedActors[linkedActor.pid.id] = linkedActor
+	return actor
+}
+
+func (actor *Actor) unlinkFrom(linkedActor *Actor) *Actor {
+	delete(actor.linkedActors, linkedActor.pid.id)
+	return actor
+}
+
+func (actor *Actor) monitoredBy(monitorActor *Actor) *Actor {
+	actor.monitorActors[monitorActor.pid.id] = monitorActor
+	return actor
+}
+
+func NewParentActor() *Actor {
+	pid := newPID()
+	actor := newActor(newContext(pid))
+	pid.mailbox.actor = actor
+	return actor
+}
+
+func (actor *Actor) TrapExit(trapExit bool) {
+	var trap int32
+	if trapExit {
+		trap = actor_trap_exit_yes
+	} else {
+		trap = actor_trap_exit_no
+	}
+	atomic.StoreInt32(&actor.trapExit, trap)
+}
+
+func (actor *Actor) Monitor(pid *PID) {
+	request := MonitorRequest{
+		who:       pid.mailbox.actor,
+		by:        actor,
+		demonitor: false,
+	}
+	sendSystem(pid, request)
+
+}
+
+func (actor *Actor) DeMonitor(pid *PID) {
+	request := MonitorRequest{
+		who:       pid.mailbox.actor,
+		by:        actor,
+		demonitor: true,
+	}
+	sendSystem(pid, request)
+}
+
+func (actor *Actor) Link(pid *PID) {
+	request := LinkRequest{who: pid.mailbox.actor, to: actor, unlink: false}
+	sendSystem(pid, request)
+	actor.linkTo(pid.mailbox.actor)
+}
+
+func (actor *Actor) Unlink(pid *PID) {
+	request := LinkRequest{who: pid.mailbox.actor, to: actor, unlink: true}
+	sendSystem(pid, request)
+	actor.unlinkFrom(pid.mailbox.actor)
+}
+
+// SpawnLink spawns a new actor linked to to the caller actor
+func (actor *Actor) SpawnLink(fn ActorFunc, args ...interface{}) *PID {
+	pid := newPID()
+	ctx := newContext(pid).withArgs(args)
+	linkedActor := newActor(ctx).linkTo(actor)
+	pid.mailbox.actor = linkedActor
+	actor.linkTo(linkedActor)
+	spawn(fn, linkedActor)
+	return pid
+}
+
+// SpawnMonitor spawns a new actor monitored by the caller actor
+func (actor *Actor) SpawnMonitor(fn ActorFunc, args ...interface{}) *PID {
+	pid := newPID()
+	ctx := newContext(pid).withArgs(args)
+	monitoredActor := newActor(ctx).monitoredBy(actor)
+	pid.mailbox.actor = monitoredActor
+	spawn(fn, monitoredActor)
+	return pid
+}
+
+// Spawn spawns a function as an actor also passing its args to the actor
+func Spawn(fn ActorFunc, args ...interface{}) *PID {
+	pid := newPID()
+	ctx := newContext(pid).withArgs(args)
+	actor := newActor(ctx)
+	pid.mailbox.actor = actor
+	spawn(fn, actor)
+	return pid
+}
+
+// Send a message to an actor by its pid
+func Send(pid *PID, message interface{}) {
+	pid.mailbox.sendUserMessage(message)
+}
+
+func sendSystem(pid *PID, message SystemMessage) {
+	pid.mailbox.sendSysMessage(message)
+}
+
+func spawn(fn ActorFunc, actor *Actor) {
+	go func(fn ActorFunc, actor *Actor) {
+		// handleTermination args and receiver will be evaluated when defer schedules our method call not when
+		// the actual method executes. other actors could be added or removed from the linked/monitored/monitors
+		// list while the actor is running but we'll not be worry about it since our receiver (actor) is a pointer.
+		defer actor.handleTermination()
+		fn(actor)
+	}(fn, actor)
+}
+
+func (actor *Actor) handleTermination() {
+	// close actor's doneCh channel so it doesn't accept any further messages
+	actor.pid.mailbox.done()
+
+	// check if we got a panic or just a normal termination
+	switch r := recover().(type) {
+	case ExitCMD:
+		// got an exit command. it means one of the linked actors had a panic
+		// let's notify our monitor actors
+		killExit := KillExit{who: actor, by: r.becauseOf, reason: r.reason}
+		actor.notifyMonitors(killExit)
+		// notify our linked actors, except the one causing this.
+		actor.notifyLinkedActors(killExit)
+	default:
+		if r != nil {
+			// we're the source of panic
+			reason := fmt.Sprint(r)
+			actor.notifyMonitors(PanicExit{who: actor, reason: reason})
+			actor.notifyLinkedActors(ExitCMD{becauseOf: actor, reason: reason})
+		} else {
+			// it's just a normal termination
+			normalExit := NormalExit{who: actor}
+			actor.notifyMonitors(normalExit)
+			actor.notifyLinkedActors(normalExit)
+		}
+	}
+}
+
+func (actor *Actor) notifyMonitors(message SystemMessage) {
+	for _, monitor := range actor.monitorActors {
+		sendSystem(monitor.pid, message)
+	}
+}
+
+func (actor *Actor) notifyLinkedActors(message SystemMessage) {
+	for _, linked := range actor.linkedActors {
+		switch msg := message.(type) {
+		case ExitCMD, NormalExit:
+			sendSystem(linked.pid, message)
+		case KillExit:
+			if msg.by.pid.id == linked.pid.id {
+				// it's the source of termination. so we don't need to notify
+				continue
+			}
+			sendSystem(linked.pid, ExitCMD{becauseOf: actor, reason: msg.reason})
+		}
+	}
+}
+
