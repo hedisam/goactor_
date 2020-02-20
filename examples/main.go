@@ -19,9 +19,9 @@ type Shutdown struct {}
 var mCount int
 
 func main() {
-	counterMain()
+	counterMain(0)
 
-	wait()
+	//wait()
 }
 
 func monitoredMain() {
@@ -35,7 +35,8 @@ func monitoredMain() {
 		}
 	}
 
-	parent.RecvWithTimeout(4*time.Second, func(message interface{}) bool {
+	parent.After(2 * time.Second)
+	parent.Recv(func(message interface{}) bool {
 		switch msg := message.(type) {
 		case goactor.TimeoutMessage:
 			fmt.Println("parent timeout: exiting...")
@@ -49,19 +50,18 @@ func monitoredMain() {
 		}
 	})
 
-	time.AfterFunc(4 * time.Second, func() {
-		goactor.Send(parent.Self(), "Hi")
-	})
-
+	// todo: check this. deadlock
+	parent.After(1 * time.Second)
 	parent.Recv(func(message interface{}) bool {
-		log.Println("got:", message)
+		log.Println("hi")
 		return false
 	})
 }
 
 func monitored(actor *goactor.Actor) {
 	fmt.Println("[+] actor spawned with id:", actor.Self().ID())
-	actor.RecvWithTimeout(1 * time.Second, func(message interface{}) bool {
+	actor.After(1 * time.Second)
+	actor.Recv(func(message interface{}) bool {
 		switch msg := message.(type) {
 		case goactor.TimeoutMessage:
 			fmt.Println("[!] actor timeout, id:", actor.Self().ID())
@@ -135,16 +135,25 @@ func panicee(actor *goactor.Actor) {
 	})
 }
 
-func counterMain() {
-	fmt.Print("Enter mCount: ")
-	fmt.Scan(&mCount)
-
+func counterMain(count int) {
+	if count <= 0 {
+		fmt.Print("Enter count: ")
+		fmt.Scan(&mCount)
+	} else {
+		mCount = count
+	}
+	parent := goactor.NewParentActor()
+	msg := Message{Origin: parent.Self()}
 	pid := goactor.Spawn(counter)
 
 	fmt.Printf("[!] sending #%d messages...\n", mCount)
 	for i := 0; i <= mCount; i++ {
-		goactor.Send(pid, "Hidayat")
+		goactor.Send(pid, msg)
 	}
+
+	parent.Recv(func(message interface{}) bool {
+		return false
+	})
 }
 
 func counter(actor *goactor.Actor) {
@@ -155,9 +164,12 @@ func counter(actor *goactor.Actor) {
 			now = time.Now()
 		} else if i == mCount {
 			fmt.Printf("[+] receiving #%d messages took: %v\n", i, time.Since(now))
+			msg := message.(Message)
+			goactor.Send(msg.Origin, "ok")
 			return false
 		}
 		i++
+		//fmt.Println("[+] counter:", message)
 		return true
 	})
 }

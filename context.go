@@ -41,3 +41,9 @@ func (ctx *Context) RecvWithTimeout(d time.Duration, handler MessageHandler) {
 	}
 	ctx.pid.mailbox.receiveWithTimeout(d, handler)
 }
+
+func (ctx *Context) After(d time.Duration) {
+	time.AfterFunc(d, func() {
+		Send(ctx.Self(), TimeoutMessage{})
+	})
+}
