@@ -39,5 +39,5 @@ func (ctx *Context) RecvWithTimeout(d time.Duration, handler MessageHandler) {
 		ctx.Recv(handler)
 		return
 	}
-	ctx.pid.mailbox.receiveWithTimeout(handler, d)
+	ctx.pid.mailbox.receiveWithTimeout(d, handler)
 }

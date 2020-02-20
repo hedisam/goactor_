@@ -48,7 +48,7 @@ func (actor *Actor) monitoredBy(monitorActor *Actor) *Actor {
 func NewParentActor() *Actor {
 	pid := newPID()
 	actor := newActor(newContext(pid))
-	pid.mailbox.actor = actor
+	pid.mailbox.setActor(actor)
 	return actor
 }
 
@@ -64,7 +64,7 @@ func (actor *Actor) TrapExit(trapExit bool) {
 
 func (actor *Actor) Monitor(pid *PID) {
 	request := MonitorRequest{
-		who:       pid.mailbox.actor,
+		who:       pid.mailbox.getActor(),
 		by:        actor,
 		demonitor: false,
 	}
@@ -74,7 +74,7 @@ func (actor *Actor) Monitor(pid *PID) {
 
 func (actor *Actor) DeMonitor(pid *PID) {
 	request := MonitorRequest{
-		who:       pid.mailbox.actor,
+		who:       pid.mailbox.getActor(),
 		by:        actor,
 		demonitor: true,
 	}
@@ -82,15 +82,15 @@ func (actor *Actor) DeMonitor(pid *PID) {
 }
 
 func (actor *Actor) Link(pid *PID) {
-	request := LinkRequest{who: pid.mailbox.actor, to: actor, unlink: false}
+	request := LinkRequest{who: pid.mailbox.getActor(), to: actor, unlink: false}
 	sendSystem(pid, request)
-	actor.linkTo(pid.mailbox.actor)
+	actor.linkTo(pid.mailbox.getActor())
 }
 
 func (actor *Actor) Unlink(pid *PID) {
-	request := LinkRequest{who: pid.mailbox.actor, to: actor, unlink: true}
+	request := LinkRequest{who: pid.mailbox.getActor(), to: actor, unlink: true}
 	sendSystem(pid, request)
-	actor.unlinkFrom(pid.mailbox.actor)
+	actor.unlinkFrom(pid.mailbox.getActor())
 }
 
 // SpawnLink spawns a new actor linked to to the caller actor
@@ -98,7 +98,7 @@ func (actor *Actor) SpawnLink(fn ActorFunc, args ...interface{}) *PID {
 	pid := newPID()
 	ctx := newContext(pid).withArgs(args)
 	linkedActor := newActor(ctx).linkTo(actor)
-	pid.mailbox.actor = linkedActor
+	pid.mailbox.setActor(linkedActor)
 	actor.linkTo(linkedActor)
 	spawn(fn, linkedActor)
 	return pid
@@ -109,7 +109,7 @@ func (actor *Actor) SpawnMonitor(fn ActorFunc, args ...interface{}) *PID {
 	pid := newPID()
 	ctx := newContext(pid).withArgs(args)
 	monitoredActor := newActor(ctx).monitoredBy(actor)
-	pid.mailbox.actor = monitoredActor
+	pid.mailbox.setActor(monitoredActor)
 	spawn(fn, monitoredActor)
 	return pid
 }
@@ -119,7 +119,7 @@ func Spawn(fn ActorFunc, args ...interface{}) *PID {
 	pid := newPID()
 	ctx := newContext(pid).withArgs(args)
 	actor := newActor(ctx)
-	pid.mailbox.actor = actor
+	pid.mailbox.setActor(actor)
 	spawn(fn, actor)
 	return pid
 }
@@ -144,8 +144,8 @@ func spawn(fn ActorFunc, actor *Actor) {
 }
 
 func (actor *Actor) handleTermination() {
-	// close actor's doneCh channel so it doesn't accept any further messages
-	actor.pid.mailbox.done()
+	// close actor's close channel so it doesn't accept any further messages
+	actor.pid.mailbox.close()
 
 	// check if we got a panic or just a normal termination
 	switch r := recover().(type) {
@@ -159,6 +159,7 @@ func (actor *Actor) handleTermination() {
 	default:
 		if r != nil {
 			// we're the source of panic
+			// todo: use better reasons. reason's type should be interface{}
 			reason := fmt.Sprint(r)
 			actor.notifyMonitors(PanicExit{who: actor, reason: reason})
 			actor.notifyLinkedActors(ExitCMD{becauseOf: actor, reason: reason})

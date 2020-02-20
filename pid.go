@@ -3,8 +3,8 @@ package goactor
 import "github.com/rs/xid"
 
 type PID struct {
-	mailbox *mailbox
-	id 	string
+	mailbox Mailbox
+	id      string
 }
 
 func (pid *PID) ID() string {
@@ -13,7 +13,7 @@ func (pid *PID) ID() string {
 
 func newPID() *PID {
 	return &PID{
-		mailbox: defaultMailbox(),
-		id: xid.New().String(),
+		mailbox: defaultMPSCMailbox(),
+		id:      xid.New().String(),
 	}
 }

@@ -16,10 +16,10 @@ type Message struct {
 type Panic struct {payload int}
 type Shutdown struct {}
 
-var count int
+var mCount int
 
 func main() {
-	monitoredMain()
+	counterMain()
 
 	wait()
 }
@@ -136,59 +136,29 @@ func panicee(actor *goactor.Actor) {
 }
 
 func counterMain() {
-	fmt.Print("Enter count: ")
-	fmt.Scanf("%d", &count)
-	fmt.Printf("\nSending %d messages...\n", count)
+	fmt.Print("Enter mCount: ")
+	fmt.Scan(&mCount)
 
-	parent := goactor.NewParentActor()
 	pid := goactor.Spawn(counter)
 
-	goactor.Send(pid, Message{Origin: parent.Self()})
-	now := time.Now()
-	for i:=0; i < count; i++ {
-		goactor.Send(pid, "count")
+	fmt.Printf("[!] sending #%d messages...\n", mCount)
+	for i := 0; i <= mCount; i++ {
+		goactor.Send(pid, "Hidayat")
 	}
-
-	fmt.Println("sent:", time.Since(now))
-
-	parent.Recv(func(message interface{}) bool {
-		switch message {
-		case "finish":
-			fmt.Println("time elapsed:", time.Since(now))
-			return false
-		default:
-			return true
-		}
-	})
 }
 
 func counter(actor *goactor.Actor) {
-	//format := ".txt"
-	//path := "C:\\Users\\Hidayat\\Desktop\\test"
-	var parent *goactor.PID
 	i := 0
+	var now time.Time
 	actor.Recv(func(message interface{}) bool {
-		switch msg := message.(type) {
-		case Message:
-			parent = msg.Origin
-			return true
-		default:
-			i++
-			//if i % 400000 == 0 {
-			//	log.Println("reading a file...")
-			//	data, err := ioutil.ReadFile(path + format)
-			//	if err != nil {log.Println("reading err: ", err)}
-			//	log.Println("writing the content to another file")
-			//	err = ioutil.WriteFile(fmt.Sprintf("%s%d%s", path, i, format), data, 0644)
-			//	if err != nil {log.Println("writing err:", err)}
-			//}
-			if i == count {
-				fmt.Printf("received messages: #%d\n", i)
-				goactor.Send(parent, "finish")
-				return false
-			}
-			return true
+		if i == 0 {
+			now = time.Now()
+		} else if i == mCount {
+			fmt.Printf("[+] receiving #%d messages took: %v\n", i, time.Since(now))
+			return false
 		}
+		i++
+		return true
 	})
 }
 
@@ -241,9 +211,7 @@ func echo(actor *goactor.Actor) {
 }
 
 func wait() {
+	fmt.Println("[!] Press ENTER to exit")
 	var s string
-	_, err := fmt.Scanln(&s)
-	if err != nil {
-		log.Println("wait err:", err)
-	}
+	fmt.Scanln(&s)
 }
