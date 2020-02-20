@@ -6,8 +6,8 @@ import (
 )
 
 const (
-	actor_trap_exit_yes	int32 = iota
-	actor_trap_exit_no
+	actor_trap_exit_no	int32 = iota
+	actor_trap_exit_yes
 )
 
 type ActorFunc func(actor *Actor)

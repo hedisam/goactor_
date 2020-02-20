@@ -19,7 +19,7 @@ type Shutdown struct {}
 var mCount int
 
 func main() {
-	counterMain(0)
+	monitoredMain()
 
 	//wait()
 }
@@ -50,9 +50,8 @@ func monitoredMain() {
 		}
 	})
 
-	// todo: check this. deadlock
-	parent.After(1 * time.Second)
-	parent.Recv(func(message interface{}) bool {
+	//parent.After(1 * time.Second)
+	parent.RecvWithTimeout(1 * time.Second, func(message interface{}) bool {
 		log.Println("hi")
 		return false
 	})
@@ -95,7 +94,7 @@ func panicMain() {
 	time.Sleep(1 * time.Second)
 	goactor.Send(pid, "Hello")
 
-	parent.Recv(func(message interface{}) bool {
+	parent.RecvWithTimeout(500 * time.Millisecond, func(message interface{}) bool {
 		log.Println("parent: ", message)
 		return false
 	})

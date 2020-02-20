@@ -41,7 +41,12 @@ func (m *queueMailbox) sendUserMessage(message interface{}) {
 	case <-m.done:
 		return
 	default:
-		m.userMailbox.Put(message)
+		// todo: should we return the error? probably yes
+		err := m.userMailbox.Put(message)
+		if err != nil {
+			log.Println("queue_mailbox put error:", err, m.actor)
+			return
+		}
 		if atomic.CompareAndSwapInt32(&m.status, mailboxIdle, mailboxProcessing) {
 			select {
 			case m.signal<- struct{}{}:
@@ -71,11 +76,17 @@ listen:
 				pass, msg := m.handleSystemMessage(msg)
 				if pass {
 					keepOn := handler(msg)
-					if !keepOn {return}
+					if !keepOn {
+						atomic.StoreInt32(&m.status, mailboxIdle)
+						return
+					}
 				}
 			default:
 				keepOn := handler(msg)
-				if !keepOn {return}
+				if !keepOn {
+					atomic.StoreInt32(&m.status, mailboxIdle)
+					return
+				}
 			}
 		}
 		atomic.StoreInt32(&m.status, mailboxIdle)
@@ -84,7 +95,43 @@ listen:
 }
 
 func (m *queueMailbox) receiveWithTimeout(d time.Duration, handler MessageHandler) {
-	return
+	timer := time.NewTimer(d)
+listen:
+	select {
+	case <-m.done:
+		return
+	case <-m.signal:
+		for m.userMailbox.Len() != 0 {
+			msg, _ := m.userMailbox.Get()
+			switch msg.(type) {
+			case SystemMessage:
+				pass, msg := m.handleSystemMessage(msg)
+				if pass {
+					keepOn := handler(msg)
+					if !keepOn {
+						atomic.StoreInt32(&m.status, mailboxIdle)
+						return
+					}
+				}
+			default:
+				keepOn := handler(msg)
+				if !keepOn {
+					atomic.StoreInt32(&m.status, mailboxIdle)
+					return
+				}
+			}
+		}
+		atomic.StoreInt32(&m.status, mailboxIdle)
+		resetTimer(timer, d, false)
+		goto listen
+	case <-timer.C:
+		keepOn := handler(TimeoutMessage{})
+		if !keepOn {
+			return
+		}
+		resetTimer(timer, d, true)
+		goto listen
+	}
 }
 
 func (m *queueMailbox) close() {

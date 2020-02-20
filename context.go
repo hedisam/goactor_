@@ -43,6 +43,7 @@ func (ctx *Context) RecvWithTimeout(d time.Duration, handler MessageHandler) {
 }
 
 func (ctx *Context) After(d time.Duration) {
+	// todo: should be cancelable
 	time.AfterFunc(d, func() {
 		Send(ctx.Self(), TimeoutMessage{})
 	})
