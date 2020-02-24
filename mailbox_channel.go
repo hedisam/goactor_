@@ -89,7 +89,7 @@ func (m *channelMailbox) handleSystemMessage(message SystemMessage) {
 	// a linked actor has terminated by panic, now, making us to terminate too.
 	case ExitCMD:
 		trapExit := atomic.LoadInt32(&m.actor.trapExit)
-		if trapExit == actor_trap_exit_yes {
+		if trapExit == actorTrapExitYes {
 			// we are trapping exit commands from linked actors. so just convert them to a PanicExit message
 			// which is a notifying message
 			m.userMailbox<- PanicExit{who: msg.becauseOf, reason: msg.reason}
@@ -119,7 +119,7 @@ func (m *channelMailbox) handleSystemMessage(message SystemMessage) {
 
 func (m *channelMailbox) receiveWithTimeout(timeout time.Duration, handler MessageHandler) {
 	timer := time.NewTimer(timeout)
-	defer timer.Stop()
+	defer stopTimer(timer)
 	loop:
 		select {
 		case msg, ok := <- m.userMailbox:
@@ -159,12 +159,17 @@ func (m *channelMailbox) close() {
 
 func resetTimer(timer *time.Timer, d time.Duration, triggered bool) {
 	if !triggered {
-		// drain the channel
-		if !timer.Stop() {
-			<-timer.C
-		}
+		stopTimer(timer)
 	}
 	timer.Reset(d)
+}
+
+// deprecated. it's blocking
+func stopTimer(timer *time.Timer) {
+	// drain the channel
+	if !timer.Stop() {
+		<-timer.C
+	}
 }
 
 func measure(fn MessageHandler, arg interface{}) (elapsedMilli int64, fnResult bool) {

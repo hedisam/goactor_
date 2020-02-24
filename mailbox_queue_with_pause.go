@@ -7,40 +7,56 @@ import (
 	"time"
 )
 
-type queueMailbox struct {
+const (
+	actorPaused		int32 = iota
+	actorActive
+)
+
+var pauseDuration = time.Second * 2
+type PauseCMD struct {}
+
+type queueMailboxPausable struct {
 	userMailbox *queue.RingBuffer
 	sysMailbox  *queue.RingBuffer
 	done        chan struct{}
 	actor       *Actor
 	status      int32
 	signal      chan struct{}
+	workStatus	int32
 }
 
-
-func defaultRingBufferQueueMailbox() Mailbox {
-	m := queueMailbox{
+// defaultAPRingBufferQueueMailbox returns an auto pausing ring buffer mailbox
+func defaultAPRingBufferQueueMailbox() Mailbox {
+	m := queueMailboxPausable{
 		userMailbox:	queue.NewRingBuffer(defaultUserMailboxCap),
 		sysMailbox:  	queue.NewRingBuffer(defaultSysMailboxCap),
 		done:       	make(chan struct{}),
 		status:      	mailboxIdle,
 		signal:      	make(chan struct{}),
+		workStatus:		actorActive,
 	}
 	return &m
 }
 
-func (m *queueMailbox) setActor(actor *Actor) {
+func (m *queueMailboxPausable) setActor(actor *Actor) {
 	m.actor = actor
 }
 
-func (m *queueMailbox) getActor() *Actor {
+func (m *queueMailboxPausable) getActor() *Actor {
 	return m.actor
 }
 
-func (m *queueMailbox) sendUserMessage(message interface{}) {
+func (m *queueMailboxPausable) sendUserMessage(message interface{}) {
 	select {
 	case <-m.done:
 		return
 	default:
+		if atomic.CompareAndSwapInt32(&m.workStatus, actorPaused, actorActive) {
+			// resume actor
+			spawn(m.actor)
+			log.Println("[+] actor resumed, id:", m.actor.pid.id)
+		}
+
 		// todo: should we return the error? probably yes
 		err := m.userMailbox.Put(message)
 		if err != nil {
@@ -57,17 +73,23 @@ func (m *queueMailbox) sendUserMessage(message interface{}) {
 	}
 }
 
-func (m *queueMailbox) sendSysMessage(message SystemMessage) {
+func (m *queueMailboxPausable) sendSysMessage(message SystemMessage) {
 	m.sendUserMessage(message)
 	return
 }
 
-func (m *queueMailbox) receive(handler MessageHandler) {
-	// todo: handle sys messages separately
+func (m *queueMailboxPausable) receive(handler MessageHandler) {
+	actorTimer := time.NewTimer(pauseDuration)
+	//defer stopTimer(actorTimer)
 listen:
 	select {
 	case <-m.done:
 		return
+	case <-actorTimer.C:
+		// sleep/pause
+		atomic.StoreInt32(&m.workStatus, actorPaused)
+		//m.fade()
+		panic(PauseCMD{})
 	case <-m.signal:
 		for m.userMailbox.Len() != 0 {
 			msg, _ := m.userMailbox.Get()
@@ -90,11 +112,12 @@ listen:
 			}
 		}
 		atomic.StoreInt32(&m.status, mailboxIdle)
+		resetTimer(actorTimer, pauseDuration, false)
 		goto listen
 	}
 }
 
-func (m *queueMailbox) receiveWithTimeout(d time.Duration, handler MessageHandler) {
+func (m *queueMailboxPausable) receiveWithTimeout(d time.Duration, handler MessageHandler) {
 	timer := time.NewTimer(d)
 	defer stopTimer(timer)
 listen:
@@ -135,12 +158,12 @@ listen:
 	}
 }
 
-func (m *queueMailbox) close() {
+func (m *queueMailboxPausable) close() {
 	close(m.done)
 }
 
 // handleSystemMessage return true if the message should be passed to the user
-func (m *queueMailbox) handleSystemMessage(message interface{}) (bool, SystemMessage) {
+func (m *queueMailboxPausable) handleSystemMessage(message interface{}) (bool, SystemMessage) {
 	switch msg := message.(type) {
 	// a monitored/linked actor has terminated with a normal status
 	case NormalExit:

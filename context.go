@@ -7,14 +7,20 @@ type MessageHandler func(message interface{}) bool
 type TimeoutMessage struct {}
 
 type Context struct {
-	pid *PID
-	args []interface{}
+	pid 	*PID
+	fn		ActorFunc
+	args	[]interface{}
 }
 
 func newContext(pid *PID) *Context {
 	return &Context{
 		pid:  pid,
 	}
+}
+
+func (ctx *Context) withActorFunc(fn ActorFunc) *Context {
+	ctx.fn = fn
+	return ctx
 }
 
 func (ctx *Context) withArgs(args []interface{}) *Context {
@@ -40,11 +46,4 @@ func (ctx *Context) RecvWithTimeout(d time.Duration, handler MessageHandler) {
 		return
 	}
 	ctx.pid.mailbox.receiveWithTimeout(d, handler)
-}
-
-func (ctx *Context) After(d time.Duration) {
-	// todo: should be cancelable
-	time.AfterFunc(d, func() {
-		Send(ctx.Self(), TimeoutMessage{})
-	})
 }

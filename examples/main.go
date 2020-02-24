@@ -19,9 +19,34 @@ type Shutdown struct {}
 var mCount int
 
 func main() {
-	monitoredMain()
+	spawnMany()
+}
 
-	//wait()
+func spawnMany() {
+	count := inputCount()
+	fmt.Println("[+] spawning", count, "actors")
+	now := time.Now()
+	for i := 0; i < count; i++ {
+		goactor.Spawn(echo)
+	}
+	fmt.Println("[!] elapsed:", time.Since(now))
+	wait()
+}
+
+func echoWithPauseMain() {
+	pid := goactor.Spawn(echo)
+	fmt.Println("echo spawned")
+
+	var cmd string = ""
+	for cmd != "shutdown" {
+		fmt.Println("Enter msg: ")
+		_, err := fmt.Scanf("%s", &cmd)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		goactor.Send(pid, cmd)
+	}
 }
 
 func monitoredMain() {
@@ -35,8 +60,7 @@ func monitoredMain() {
 		}
 	}
 
-	parent.After(2 * time.Second)
-	parent.Recv(func(message interface{}) bool {
+	parent.RecvWithTimeout(2 * time.Second, func(message interface{}) bool {
 		switch msg := message.(type) {
 		case goactor.TimeoutMessage:
 			fmt.Println("parent timeout: exiting...")
@@ -59,8 +83,8 @@ func monitoredMain() {
 
 func monitored(actor *goactor.Actor) {
 	fmt.Println("[+] actor spawned with id:", actor.Self().ID())
-	actor.After(1 * time.Second)
-	actor.Recv(func(message interface{}) bool {
+
+	actor.RecvWithTimeout(1 * time.Second, func(message interface{}) bool {
 		switch msg := message.(type) {
 		case goactor.TimeoutMessage:
 			fmt.Println("[!] actor timeout, id:", actor.Self().ID())
@@ -158,7 +182,13 @@ func counterMain(count int) {
 func counter(actor *goactor.Actor) {
 	i := 0
 	var now time.Time
-	actor.Recv(func(message interface{}) bool {
+	actor.RecvWithTimeout(1 * time.Second, func(message interface{}) bool {
+		switch message.(type) {
+		case goactor.TimeoutMessage:
+			log.Println("counter: timeout")
+			return false
+		default:
+		}
 		if i == 0 {
 			now = time.Now()
 		} else if i == mCount {
@@ -211,14 +241,22 @@ func echo(actor *goactor.Actor) {
 	actor.Recv(func(message interface{}) bool {
 		switch message {
 		case "shutdown":
+			fmt.Println("[!] echo is shutting down")
 			return false
 		default:
-			log.Println("echo: ", message)
-			msg := message.(Message)
-			goactor.Send(msg.Origin, msg.Text)
+			fmt.Println("[!] echo:", message)
+			//msg := message.(Message)
+			//goactor.Send(msg.Origin, msg.Text)
 			return true
 		}
 	})
+}
+
+func inputCount() int {
+	fmt.Print("Enter count: ")
+	var count int
+	fmt.Scanf("%d", &count)
+	return count
 }
 
 func wait() {
