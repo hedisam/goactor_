@@ -144,16 +144,16 @@ func spawn(actor *Actor) {
 
 func (actor *Actor) handleTermination() {
 	// close actor's close channel so it doesn't accept any further messages
-	//actor.pid.mailbox.close()
+	actor.pid.mailbox.close()
 
 	// check if we got a panic or just a normal termination
 	switch r := recover().(type) {
-	case PauseCMD:
-		// we're gonna pause the actor. how? just by returning. notice that we're not closing the mailbox.
-		//log.Println("[-] actor paused, id:", actor.pid.id)
-		return
+	//case PauseCMD:
+	//	// we're gonna pause the actor. how? just by returning. notice that we're not closing the mailbox.
+	//	//log.Println("[-] actor paused, id:", actor.pid.id)
+	//	return
 	case ExitCMD:
-		actor.pid.mailbox.close()
+		//actor.pid.mailbox.close()
 		// got an exit command. it means one of the linked actors had a panic
 		// let's notify our monitor actors
 		killExit := KillExit{who: actor, by: r.becauseOf, reason: r.reason}
@@ -161,7 +161,7 @@ func (actor *Actor) handleTermination() {
 		// notify our linked actors, except the one causing this.
 		actor.notifyLinkedActors(killExit)
 	default:
-		actor.pid.mailbox.close()
+		//actor.pid.mailbox.close()
 		if r != nil {
 			// we're caused the the panic
 			// todo: use better reasons. reason's type should be interface{}
