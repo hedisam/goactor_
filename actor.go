@@ -54,11 +54,9 @@ func NewParentActor() *Actor {
 }
 
 func (actor *Actor) TrapExit(trapExit bool) {
-	var trap int32
+	var trap = actorTrapExitNo
 	if trapExit {
 		trap = actorTrapExitYes
-	} else {
-		trap = actorTrapExitNo
 	}
 	atomic.StoreInt32(&actor.trapExit, trap)
 }
@@ -151,7 +149,7 @@ func (actor *Actor) handleTermination() {
 	// check if we got a panic or just a normal termination
 	switch r := recover().(type) {
 	case PauseCMD:
-		// we're gonna pause the actor. how? just by returning
+		// we're gonna pause the actor. how? just by returning. notice that we're not closing the mailbox.
 		//log.Println("[-] actor paused, id:", actor.pid.id)
 		return
 	case ExitCMD:
