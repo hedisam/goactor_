@@ -18,8 +18,36 @@ type Shutdown struct {}
 
 var mCount int
 
+const (
+	zero int32 = iota - 1
+	one
+	two
+	three
+)
+
 func main() {
-	spawnMany()
+	supervisor()
+
+	wait()
+}
+
+func supervisor() {
+	specs := []goactor.ChildSpec{
+		goactor.NewChildSpec("panicee", panicee),
+	}
+	_, err := goactor.StartSupervisor(specs, goactor.OneForOneStrategy)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// make panicee to panic
+	goactor.SendNamed("panicee", Panic{payload: 0})
+
+	time.Sleep(10 * time.Millisecond)
+	goactor.SendNamed("panicee", "Hello panicee")
+	goactor.SendNamed("panicee", "Hello panicee")
+	goactor.SendNamed("panicee", "Hello panicee")
+	// make panicee to shutdown normally
+	goactor.SendNamed("panicee", Shutdown{})
 }
 
 func spawnMany() {
@@ -141,6 +169,7 @@ func panicer(actor *goactor.Actor) {
 }
 
 func panicee(actor *goactor.Actor) {
+	log.Println("[+] panicee started")
 	actor.Recv(func(message interface{}) bool {
 		switch msg := message.(type) {
 		case Shutdown:

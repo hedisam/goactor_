@@ -128,6 +128,12 @@ func Send(pid *PID, message interface{}) {
 	pid.mailbox.sendUserMessage(message)
 }
 
+func SendNamed(name string, message interface{}) {
+	pid := WhereIs(name)
+	if pid == nil {return}
+	Send(pid, message)
+}
+
 func sendSystem(pid *PID, message SystemMessage) {
 	pid.mailbox.sendSysMessage(message)
 }
