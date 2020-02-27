@@ -18,13 +18,6 @@ type Shutdown struct {}
 
 var mCount int
 
-const (
-	zero int32 = iota - 1
-	one
-	two
-	three
-)
-
 func main() {
 	supervisor()
 
@@ -42,7 +35,7 @@ func supervisor() {
 	// make panicee to panic
 	goactor.SendNamed("panicee", Panic{payload: 0})
 
-	time.Sleep(10 * time.Millisecond)
+	time.Sleep(1 * time.Millisecond)
 	goactor.SendNamed("panicee", "Hello panicee")
 	goactor.SendNamed("panicee", "Hello panicee")
 	goactor.SendNamed("panicee", "Hello panicee")
