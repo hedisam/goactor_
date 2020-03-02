@@ -6,23 +6,33 @@ import (
 )
 
 const (
+	// if a child process terminates, only that process is restarted
 	OneForOneStrategy	SupervisorStrategy = iota
+
+	// if a child process terminates, all other child processes are terminated
+	// and then all of them (including the terminated one) are restarted.
+	OneForAllStrategy
+
+	// if a child process terminates, the terminated child process and
+	// the rest of the children started after it, are terminated and restarted.
+	RestForOneStrategy
 )
 
 const (
 	RestartAlways	int32 = iota
-	RestartNever
 	RestartTransient
+	RestartNever
 )
 
 const (
-	Infinity	int32 = iota - 1
-	Kill
+	ShutdownInfinity	int32 = iota - 1	// -1
+	ShutdownKill							// 0
+									// >= 1 as number of milliseconds
 )
 
 type SupervisorStrategy	int32
-
-type childSpecMap map[interface{}]ChildSpec
+type childSpecMap map[string]ChildSpec
+type ChildType string
 
 type registerChild struct {
 	pid *PID
@@ -34,7 +44,7 @@ type ChildSpec struct {
 	start childSpecStart
 	restart int32
 	shutdown int32
-	chType 	interface{}
+	childType 	ChildType
 }
 
 type childSpecStart struct {
@@ -48,7 +58,7 @@ func NewChildSpec(id string, fn ActorFunc, args ...interface{}) ChildSpec {
 		start: childSpecStart{actorFunc: fn, args: args},
 		restart: RestartTransient,
 		shutdown: 5000,
-		chType: "worker",
+		childType: "worker",
 	}
 }
 
@@ -78,12 +88,22 @@ func register(supervisor *PID, pid *PID, name string) {
 }
 
 func supervisor(supervisor *Actor) {
-	specs := supervisor.Args()[0].(childSpecMap)
-	//strategy := supervisor.Args()[1].(SupervisorStrategy)
 	registry := map[*PID]string{}
+	children := supervisor.Args()[0].(childSpecMap)
+	strategy := supervisor.Args()[1].(SupervisorStrategy)
 
-	// todo: handle other strategies
-	// default strategy is one-for-one
+	reSpawn := func(name string) {
+		child := supervisor.SpawnLink(children[name].start.actorFunc, children[name].start.args)
+		registry[child] = name
+		Register(name, child)
+	}
+
+	shutdown := func(name string, pid *PID) {
+		// todo: consider child shutdown value
+		// todo: close the actor context [context.Context]
+		Send(pid, KillExit{who: pid.mailbox.getActor(), by: supervisor, reason: "shutdown by supervisor"})
+	}
+
 	supervisor.Recv(func(message interface{}) bool {
 		switch msg := message.(type) {
 		case registerChild:
@@ -92,20 +112,36 @@ func supervisor(supervisor *Actor) {
 		case NormalExit:
 			// it's a normal termination
 			name := registry[msg.who.pid]
-			switch specs[name].restart {
-			case RestartAlways:
-				child := supervisor.SpawnLink(specs[name].start.actorFunc, specs[name].start.args)
-				registry[child] = name
-				Register(name, child)
+			if children[name].restart == RestartAlways {
+				switch strategy {
+				case OneForOneStrategy:
+					// just restart this actor
+					reSpawn(name)
+				case OneForAllStrategy:
+					// shutdown and restart all children
+					for pid, name := range registry {
+						shutdown(name, pid)
+						reSpawn(name)
+					}
+				case RestForOneStrategy:
+					// restart this one and all actors that are started after this
+
+				}
 			}
 		case PanicExit:
 			// it's an abnormal termination
 			name := registry[msg.who.pid]
-			switch specs[name].restart {
+			switch children[name].restart {
 			case RestartAlways, RestartTransient:
-				child := supervisor.SpawnLink(specs[name].start.actorFunc, specs[name].start.args)
-				registry[child] = name
-				Register(name, child)
+				switch strategy {
+				case OneForOneStrategy:
+					reSpawn(name)
+				case OneForAllStrategy:
+					for pid, name := range registry {
+						shutdown(name, pid)
+						reSpawn(name)
+					}
+				}
 			}
 		default:
 			log.Println("supervisor received unknown message:", msg)
