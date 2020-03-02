@@ -51,11 +51,11 @@ func (m *queueMailboxPausable) sendUserMessage(message interface{}) {
 	case <-m.done:
 		return
 	default:
-		if atomic.CompareAndSwapInt32(&m.workStatus, actorPaused, actorActive) {
-			// resume actor
-			spawn(m.actor)
-			log.Println("[+] actor resumed, id:", m.actor.pid.id)
-		}
+		//if atomic.CompareAndSwapInt32(&m.workStatus, actorPaused, actorActive) {
+		//	// resume actor
+		//	spawn(m.actor)
+		//	log.Println("[+] actor resumed, id:", m.actor.pid.id)
+		//}
 
 		// todo: should we return the error? probably yes
 		err := m.userMailbox.Put(message)
@@ -79,17 +79,17 @@ func (m *queueMailboxPausable) sendSysMessage(message SystemMessage) {
 }
 
 func (m *queueMailboxPausable) receive(handler MessageHandler) {
-	actorTimer := time.NewTimer(pauseDuration)
+	//actorTimer := time.NewTimer(pauseDuration)
 	//defer stopTimer(actorTimer)
 listen:
 	select {
 	case <-m.done:
 		return
-	case <-actorTimer.C:
-		// sleep/pause
-		atomic.StoreInt32(&m.workStatus, actorPaused)
-		//m.fade()
-		panic(PauseCMD{})
+	//case <-actorTimer.C:
+	//	// sleep/pause
+	//	atomic.StoreInt32(&m.workStatus, actorPaused)
+	//	//m.fade()
+	//	panic(PauseCMD{})
 	case <-m.signal:
 		for m.userMailbox.Len() != 0 {
 			msg, _ := m.userMailbox.Get()
@@ -112,7 +112,7 @@ listen:
 			}
 		}
 		atomic.StoreInt32(&m.status, mailboxIdle)
-		resetTimer(actorTimer, pauseDuration, false)
+		//resetTimer(actorTimer, pauseDuration, false)
 		goto listen
 	}
 }

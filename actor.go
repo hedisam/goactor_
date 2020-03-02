@@ -54,11 +54,9 @@ func NewParentActor() *Actor {
 }
 
 func (actor *Actor) TrapExit(trapExit bool) {
-	var trap int32
+	var trap = actorTrapExitNo
 	if trapExit {
 		trap = actorTrapExitYes
-	} else {
-		trap = actorTrapExitNo
 	}
 	atomic.StoreInt32(&actor.trapExit, trap)
 }
@@ -130,6 +128,12 @@ func Send(pid *PID, message interface{}) {
 	pid.mailbox.sendUserMessage(message)
 }
 
+func SendNamed(name string, message interface{}) {
+	pid := WhereIs(name)
+	if pid == nil {return}
+	Send(pid, message)
+}
+
 func sendSystem(pid *PID, message SystemMessage) {
 	pid.mailbox.sendSysMessage(message)
 }
@@ -146,16 +150,16 @@ func spawn(actor *Actor) {
 
 func (actor *Actor) handleTermination() {
 	// close actor's close channel so it doesn't accept any further messages
-	//actor.pid.mailbox.close()
+	actor.pid.mailbox.close()
 
 	// check if we got a panic or just a normal termination
 	switch r := recover().(type) {
-	case PauseCMD:
-		// we're gonna pause the actor. how? just by returning
-		//log.Println("[-] actor paused, id:", actor.pid.id)
-		return
+	//case PauseCMD:
+	//	// we're gonna pause the actor. how? just by returning. notice that we're not closing the mailbox.
+	//	//log.Println("[-] actor paused, id:", actor.pid.id)
+	//	return
 	case ExitCMD:
-		actor.pid.mailbox.close()
+		//actor.pid.mailbox.close()
 		// got an exit command. it means one of the linked actors had a panic
 		// let's notify our monitor actors
 		killExit := KillExit{who: actor, by: r.becauseOf, reason: r.reason}
@@ -163,7 +167,7 @@ func (actor *Actor) handleTermination() {
 		// notify our linked actors, except the one causing this.
 		actor.notifyLinkedActors(killExit)
 	default:
-		actor.pid.mailbox.close()
+		//actor.pid.mailbox.close()
 		if r != nil {
 			// we're caused the the panic
 			// todo: use better reasons. reason's type should be interface{}

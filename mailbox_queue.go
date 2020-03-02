@@ -96,7 +96,7 @@ listen:
 
 func (m *queueMailbox) receiveWithTimeout(d time.Duration, handler MessageHandler) {
 	timer := time.NewTimer(d)
-	defer stopTimer(timer)
+	//defer stopTimer(timer)
 listen:
 	select {
 	case <-m.done:

@@ -13,7 +13,7 @@ func (pid *PID) ID() string {
 
 func newPID() *PID {
 	return &PID{
-		mailbox: defaultAPRingBufferQueueMailbox(),
+		mailbox: defaultRingBufferQueueMailbox(),
 		id:      xid.New().String(),
 	}
 }
