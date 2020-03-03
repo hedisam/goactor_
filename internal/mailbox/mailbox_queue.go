@@ -2,7 +2,7 @@ package mailbox
 
 import (
 	"github.com/Workiva/go-datastructures/queue"
-	"github.com/hedisam/goactor/internal/sysmsg"
+	"github.com/hedisam/goactor/sysmsg"
 	"log"
 	"sync/atomic"
 	"time"

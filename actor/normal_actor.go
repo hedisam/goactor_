@@ -4,7 +4,7 @@ import (
 	"github.com/hedisam/goactor/context"
 	"github.com/hedisam/goactor/internal/mailbox"
 	"github.com/hedisam/goactor/internal/pid"
-	"github.com/hedisam/goactor/internal/sysmsg"
+	"github.com/hedisam/goactor/sysmsg"
 	"sync/atomic"
 )
 

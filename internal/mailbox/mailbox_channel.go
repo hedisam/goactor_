@@ -1,7 +1,7 @@
 package mailbox
 
 import (
-	"github.com/hedisam/goactor/internal/sysmsg"
+	"github.com/hedisam/goactor/sysmsg"
 	"time"
 )
 
