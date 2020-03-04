@@ -17,11 +17,18 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 				return true, msg
 			} else {
 				switch msg.Reason {
-				case sysmsg.Kill, sysmsg.Panic:
+				case sysmsg.Kill:
 					panic(sysmsg.Exit{
 						Who:      m.Utils().Self(),
 						Parent:   msg.Who,
 						Reason:   sysmsg.Kill,
+						Relation: sysmsg.Linked,
+					})
+				case sysmsg.Panic:
+					panic(sysmsg.Exit{
+						Who:      m.Utils().Self(),
+						Parent:   msg.Who,
+						Reason:   sysmsg.Panic,
 						Relation: sysmsg.Linked,
 					})
 				case sysmsg.Normal:
@@ -36,7 +43,12 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 		if m.Utils().TrapExit() {
 			return true, msg
 		} else {
-			panic(msg)
+			panic(sysmsg.Exit{
+				Who:      m.Utils().Self(),
+				Parent:   msg.Parent,
+				Reason:   sysmsg.Kill,
+				Relation: sysmsg.Linked,
+			})
 		}
 	case sysmsg.Monitor:
 		if msg.Revert {

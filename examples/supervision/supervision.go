@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	_, err := supervisor.Start(supervisor.OneForOneStrategy,
+	_, err := supervisor.Start(supervisor.OneForAllStrategy,
 		supervisor.NewChildSpec("#1", child, "#1"),
 		supervisor.NewChildSpec("#2", child, "#2"),
 	)

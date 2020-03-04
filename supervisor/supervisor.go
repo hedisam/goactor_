@@ -62,7 +62,7 @@ func supervisor(supervisor actor.Actor) {
 	shutdown := func(name string, _pid pid.PID) {
 		// todo: close the actor context [context.Context]
 		actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
-			Parent:   supervisor,
+			Parent:   pid.ExtractPID(supervisor.Self()),
 			Shutdown: children[name].shutdown,
 		})
 	}
@@ -80,8 +80,7 @@ func supervisor(supervisor actor.Actor) {
 			actor.Send(msg.sender, "ok")
 		case sysmsg.Exit:
 			switch msg.Reason {
-			// todo: we should have a specific reason for "shutdown by supervisor"
-			case sysmsg.Kill, sysmsg.Panic:
+			case sysmsg.Panic:
 				name := registry[msg.Who.(pid.PID)]
 				switch children[name].restart {
 				case RestartAlways, RestartTransient:
@@ -89,15 +88,21 @@ func supervisor(supervisor actor.Actor) {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						for _pid, name := range registry {
-							_pid := _pid
-							shutdown(name, _pid)
-							spawn(name)
+						registry := copyMap(registry)
+						for _pid, id := range registry {
+							if id != name {
+								_pid := _pid
+								shutdown(id, _pid)
+							}
+							spawn(id)
 						}
 					case RestForOneStrategy:
-						panic("implement RestartForOneStrategy")
+						log.Println("implement RestartForOneStrategy")
 					}
 				}
+			case sysmsg.Kill:
+				// in result of sending a shutdown msg
+				log.Println("supervisor: kill")
 			case sysmsg.Normal:
 				name := registry[msg.Who.(pid.PID)]
 				if children[name].restart == RestartAlways {
@@ -105,10 +110,13 @@ func supervisor(supervisor actor.Actor) {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						for _pid, name := range registry {
-							_pid := _pid
-							shutdown(name, _pid)
-							spawn(name)
+						registry := copyMap(registry)
+						for _pid, id := range registry {
+							if id != name {
+								_pid := _pid
+								shutdown(id, _pid)
+							}
+							spawn(id)
 						}
 					case RestForOneStrategy:
 						panic("implement RestForOneStrategy")
@@ -141,6 +149,14 @@ func specsToMap(specs []*ChildSpec) (specsMap childSpecMap, err error) {
 		}
 
 		specsMap[s.id] = *s
+	}
+	return
+}
+
+func copyMap(src map[pid.PID]string) (dst map[pid.PID]string) {
+	dst = make(map[pid.PID]string)
+	for k, v := range src {
+		dst[k] = v
 	}
 	return
 }

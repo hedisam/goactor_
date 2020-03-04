@@ -147,27 +147,13 @@ func (a *actor) handleTermination() {
 	// check if we got a panic or just a normal return
 	switch r := recover().(type) {
 
-	// a linked actor terminated
+	// a linked actor terminated or got a sysmsg.Shutdown command by a supervisor
 	// notify monitors and other linked actors
 	case sysmsg.Exit:
 		a.notifyLinkedActors(r)
 		r1 := r
 		r1.Relation = sysmsg.Monitored
 		a.notifyLinkedActors(r)
-
-	// someone commanded us to shutdown.
-	case sysmsg.Shutdown:
-		exit := sysmsg.Exit{
-			Who:      pid.ExtractPID(a.self),
-			Parent:   r.Parent,
-			Reason:   sysmsg.Kill,
-			Relation: sysmsg.Linked,
-		}
-		a.notifyLinkedActors(exit)
-		exit1 := exit
-		exit1.Relation = sysmsg.Monitored
-		a.notifyMonitors(exit1)
-
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {

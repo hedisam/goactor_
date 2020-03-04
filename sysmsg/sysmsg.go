@@ -7,6 +7,7 @@ type SystemMessage interface {
 type Reason string
 
 const (
+	// Kill is a result of Shutdown message
 	Kill   Reason = "kill"
 	Panic  Reason = "panic"
 	Normal Reason = "normal"
