@@ -40,16 +40,16 @@ func (a *actor) build() Actor {
 
 func (a *actor) setUtils(utils *mailbox.ActorUtils) {
 	utils.Link = func(pid interface{}) {
-		a.link(FromInterface(pid))
+		a.link(fromInterface(pid))
 	}
 	utils.Unlink = func(pid interface{}) {
-		a.unlink(FromInterface(pid))
+		a.unlink(fromInterface(pid))
 	}
 	utils.MonitoredBy = func(pid interface{}) {
-		a.monitoredBy(FromInterface(pid))
+		a.monitoredBy(fromInterface(pid))
 	}
 	utils.DemonitorBy = func(pid interface{}) {
-		a.demoniteredBy(FromInterface(pid))
+		a.demoniteredBy(fromInterface(pid))
 	}
 	utils.Self = func() interface{} {
 		return a.Self().pid
@@ -209,4 +209,9 @@ func (a *actor) notifyLinkedActors(message sysmsg.Exit) {
 			sendSystemMessage(&PID{linked}, message)
 		}
 	}
+}
+
+func fromInterface(p interface{}) (_pid pid.PID) {
+	_pid, _ = p.(pid.PID)
+	return
 }

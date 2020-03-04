@@ -15,10 +15,10 @@ const (
 )
 
 type Mailbox interface {
-	SendUserMessage(interface{})
-	SendSystemMessage(interface{})
-	Receive(MessageHandler)
-	ReceiveWithTimeout(time.Duration, MessageHandler)
+	SendUserMessage(message interface{})
+	SendSystemMessage(message interface{})
+	Receive(handler MessageHandler)
+	ReceiveWithTimeout(d time.Duration, handler MessageHandler)
 	Dispose()
 	Utils() *ActorUtils
 }
