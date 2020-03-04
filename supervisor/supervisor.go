@@ -57,6 +57,7 @@ func supervisor(supervisor actor.Actor) {
 		registry[pid.ExtractPID(child)] = name
 		// register globally
 		actor.Register(name, child)
+		log.Println("registry:", registry)
 	}
 
 	shutdown := func(name string, _pid pid.PID) {
@@ -88,8 +89,9 @@ func supervisor(supervisor actor.Actor) {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						registry := copyMap(registry)
-						for _pid, id := range registry {
+						reg := copyMap(registry)
+						for _pid, id := range reg {
+							delete(registry, _pid)
 							if id != name {
 								_pid := _pid
 								shutdown(id, _pid)
@@ -110,8 +112,9 @@ func supervisor(supervisor actor.Actor) {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						registry := copyMap(registry)
-						for _pid, id := range registry {
+						reg := copyMap(registry)
+						for _pid, id := range reg {
+							delete(registry, _pid)
 							if id != name {
 								_pid := _pid
 								shutdown(id, _pid)
