@@ -13,11 +13,15 @@ type actorContext struct {
 }
 
 func NewContext(pid pid.PID, args []interface{}) Context {
-	return &actorContext{
+	ctx := &actorContext{
 		pid:  pid,
 		args: args,
 		done: make(chan struct{}),
 	}
+	pid.SetShutdown(func() {
+		close(ctx.done)
+	})
+	return ctx
 }
 
 func (ctx *actorContext) Args() []interface{} {

@@ -57,15 +57,14 @@ func supervisor(supervisor actor.Actor) {
 		registry[pid.ExtractPID(child)] = name
 		// register globally
 		actor.Register(name, child)
-		log.Println("registry:", registry)
 	}
 
 	shutdown := func(name string, _pid pid.PID) {
-		// todo: close the actor context [context.Context]
 		actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
 			Parent:   pid.ExtractPID(supervisor.Self()),
 			Shutdown: children[name].shutdown,
 		})
+		_pid.Shutdown()()
 	}
 
 	init := func() {

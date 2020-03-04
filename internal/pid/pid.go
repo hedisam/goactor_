@@ -6,6 +6,11 @@ import (
 
 type PID interface {
 	Mailbox() mailbox.Mailbox
+
+	// Shutdown() returns a function that can be used to close the context's done channel.
+	// used by supervisor when shutting down an actor
+	Shutdown() func()
+	SetShutdown(fn func())
 }
 
 type ProtectedPID struct {
