@@ -1,19 +1,21 @@
 package actor
 
-var myPID *PID
+import "github.com/hedisam/goactor/internal/pid"
 
-type registryMap map[string]*PID
+var myPID *pid.ProtectedPID
+
+type registryMap map[string]*pid.ProtectedPID
 
 type cmdRegister struct {
 	name string
-	pid  *PID
+	pid  *pid.ProtectedPID
 }
 type cmdUnregister struct {
 	name string
 }
 type cmdGet struct {
 	name   string
-	sender *PID
+	sender *pid.ProtectedPID
 }
 
 func init() {

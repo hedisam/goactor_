@@ -18,16 +18,16 @@ func NewFutureActor() *futureActor {
 	}
 }
 
-func (f *futureActor) Self() *PID {
-	return &PID{f.pid}
+func (f *futureActor) Self() *pid.ProtectedPID {
+	return pid.NewProtectedPID(f.pid)
 }
 
-func (f *futureActor) Monitor(pid *PID) {
-	request := sysmsg.Monitor{Parent: f.Self().pid}
-	sendSystemMessage(pid, request)
+func (f *futureActor) Monitor(_pid *pid.ProtectedPID) {
+	request := sysmsg.Monitor{Parent: pid.ExtractPID(_pid)}
+	sendSystemMessage(_pid, request)
 }
 
-func (f *futureActor) SendAndMonitor(pid *PID, message interface{}) {
+func (f *futureActor) SendAndMonitor(pid *pid.ProtectedPID, message interface{}) {
 	f.Monitor(pid)
 	Send(pid, message)
 }

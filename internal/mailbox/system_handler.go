@@ -25,7 +25,8 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 						Relation: sysmsg.Linked,
 					})
 				case sysmsg.Normal:
-					return false, nil
+					// for supervisor
+					return true, msg
 				}
 			}
 		}

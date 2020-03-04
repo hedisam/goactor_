@@ -15,7 +15,7 @@ type actor struct {
 	linkedActors map[pid.PID]pid.PID
 	// actors that are monitoring me. one way communication
 	monitorActors map[pid.PID]pid.PID
-	self          *PID
+	self          *pid.ProtectedPID
 }
 
 func newActor(ctx context.Context, utils *mailbox.ActorUtils) *actor {
@@ -29,8 +29,8 @@ func newActor(ctx context.Context, utils *mailbox.ActorUtils) *actor {
 	return actor
 }
 
-func (a *actor) withPID(pid pid.PID) *actor {
-	a.self = &PID{pid}
+func (a *actor) withPID(_pid pid.PID) *actor {
+	a.self = pid.NewProtectedPID(_pid)
 	return a
 }
 
@@ -52,7 +52,7 @@ func (a *actor) setUtils(utils *mailbox.ActorUtils) {
 		a.demoniteredBy(fromInterface(pid))
 	}
 	utils.Self = func() interface{} {
-		return a.Self().pid
+		return pid.ExtractPID(a.Self())
 	}
 	utils.TrapExit = a.trapExited
 }
@@ -84,44 +84,44 @@ func (a *actor) trapExited() (trap bool) {
 	return
 }
 
-func (a *actor) Monitor(pid *PID) {
-	request := sysmsg.Monitor{Parent: a.Self().pid}
-	sendSystemMessage(pid, request)
+func (a *actor) Monitor(ppid *pid.ProtectedPID) {
+	request := sysmsg.Monitor{Parent: pid.ExtractPID(a.self)}
+	sendSystemMessage(ppid, request)
 }
 
-func (a *actor) Demonitor(pid *PID) {
-	request := sysmsg.Monitor{Parent: a.Self().pid, Revert: true}
-	sendSystemMessage(pid, request)
+func (a *actor) Demonitor(ppid *pid.ProtectedPID) {
+	request := sysmsg.Monitor{Parent: pid.ExtractPID(a.self), Revert: true}
+	sendSystemMessage(ppid, request)
 }
 
-func (a *actor) Link(pid *PID) {
+func (a *actor) Link(ppid *pid.ProtectedPID) {
 	// send a link request to the target actor
-	req := sysmsg.Link{To: a.Self().pid}
-	sendSystemMessage(pid, req)
+	req := sysmsg.Link{To: pid.ExtractPID(a.self)}
+	sendSystemMessage(ppid, req)
 	// send a link request to ourselves
-	req1 := sysmsg.Link{To: pid.pid}
+	req1 := sysmsg.Link{To: pid.ExtractPID(ppid)}
 	sendSystemMessage(a.Self(), req1)
 }
 
-func (a *actor) Unlink(pid *PID) {
+func (a *actor) Unlink(ppid *pid.ProtectedPID) {
 	// send an unlink request to the target actor
-	req := sysmsg.Link{To: a.Self().pid, Revert: true}
-	sendSystemMessage(pid, req)
+	req := sysmsg.Link{To: pid.ExtractPID(a.self), Revert: true}
+	sendSystemMessage(ppid, req)
 	// send an unlink request to ourselves
-	req1 := sysmsg.Link{To: pid.pid, Revert: true}
+	req1 := sysmsg.Link{To: pid.ExtractPID(ppid), Revert: true}
 	sendSystemMessage(a.Self(), req1)
 }
 
-func (a *actor) SpawnLink(fn Func, args ...interface{}) *PID {
-	_pid := Spawn(fn, args)
-	a.Link(_pid)
-	return _pid
+func (a *actor) SpawnLink(fn Func, args ...interface{}) *pid.ProtectedPID {
+	ppid := Spawn(fn, args...)
+	a.Link(ppid)
+	return ppid
 }
 
-func (a *actor) SpawnMonitor(fn Func, args ...interface{}) *PID {
-	_pid := Spawn(fn, args)
-	a.Monitor(_pid)
-	return _pid
+func (a *actor) SpawnMonitor(fn Func, args ...interface{}) *pid.ProtectedPID {
+	ppid := Spawn(fn, args...)
+	a.Monitor(ppid)
+	return ppid
 }
 
 func (a *actor) TrapExit(trapExit bool) {
@@ -136,13 +136,13 @@ func (a *actor) Context() context.Context {
 	return a.context
 }
 
-func (a *actor) Self() *PID {
+func (a *actor) Self() *pid.ProtectedPID {
 	return a.self
 }
 
 func (a *actor) handleTermination() {
 	// close actor's mailbox done channel so it can't accept any further messages
-	a.Self().pid.Mailbox().Dispose()
+	pid.ExtractPID(a.self).Mailbox().Dispose()
 
 	// check if we got a panic or just a normal return
 	switch r := recover().(type) {
@@ -158,7 +158,7 @@ func (a *actor) handleTermination() {
 	// someone commanded us to shutdown.
 	case sysmsg.Shutdown:
 		exit := sysmsg.Exit{
-			Who:      a.Self().pid,
+			Who:      pid.ExtractPID(a.self),
 			Parent:   r.Parent,
 			Reason:   sysmsg.Kill,
 			Relation: sysmsg.Linked,
@@ -172,7 +172,7 @@ func (a *actor) handleTermination() {
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {
 			exit := sysmsg.Exit{
-				Who:      a.Self().pid,
+				Who:      pid.ExtractPID(a.self),
 				Reason:   sysmsg.Panic,
 				Relation: sysmsg.Linked,
 			}
@@ -184,7 +184,7 @@ func (a *actor) handleTermination() {
 			// it's a normal exit
 		} else {
 			normal := sysmsg.Exit{
-				Who:      a.Self().pid,
+				Who:      pid.ExtractPID(a.self),
 				Reason:   sysmsg.Normal,
 				Relation: sysmsg.Linked,
 			}
@@ -198,7 +198,7 @@ func (a *actor) handleTermination() {
 
 func (a *actor) notifyMonitors(message sysmsg.Exit) {
 	for _, monitor := range a.monitorActors {
-		sendSystemMessage(&PID{monitor}, message)
+		sendSystemMessage(pid.NewProtectedPID(monitor), message)
 	}
 }
 
@@ -206,7 +206,7 @@ func (a *actor) notifyLinkedActors(message sysmsg.Exit) {
 	for _, linked := range a.linkedActors {
 		if linked != message.Parent {
 			// todo: what if the linked parent actor is a supervisor?
-			sendSystemMessage(&PID{linked}, message)
+			sendSystemMessage(pid.NewProtectedPID(linked), message)
 		}
 	}
 }

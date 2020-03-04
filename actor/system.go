@@ -7,23 +7,23 @@ import (
 	"github.com/hedisam/goactor/sysmsg"
 )
 
-func Send(pid *PID, message interface{}) {
-	pid.pid.Mailbox().SendUserMessage(message)
+func Send(ppid *pid.ProtectedPID, message interface{}) {
+	pid.ExtractPID(ppid).Mailbox().SendUserMessage(message)
 }
 
 func SendNamed(name string, message interface{}) {
-	_pid := WhereIs(name)
-	if _pid == nil {return}
-	Send(_pid, message)
+	ppid := WhereIs(name)
+	if ppid == nil {return}
+	Send(ppid, message)
 }
 
-func Spawn(fn Func, args ...interface{}) *PID {
+func Spawn(fn Func, args ...interface{}) *pid.ProtectedPID {
 	utils := &mailbox.ActorUtils{}
 	_pid := pid.NewPID(utils)
 	ctx := context.NewContext(_pid, args)
 	actor := newActor(ctx, utils).withPID(_pid)
 	spawn(fn, actor)
-	return &PID{pid: _pid}
+	return pid.NewProtectedPID(_pid)
 }
 
 func spawn(fn Func, actor Actor) {
@@ -33,6 +33,6 @@ func spawn(fn Func, actor Actor) {
 	}(fn, actor)
 }
 
-func sendSystemMessage(pid *PID, message sysmsg.SystemMessage) {
-	pid.pid.Mailbox().SendSystemMessage(message)
+func sendSystemMessage(ppid *pid.ProtectedPID, message sysmsg.SystemMessage) {
+	pid.ExtractPID(ppid).Mailbox().SendSystemMessage(message)
 }

@@ -1,6 +1,8 @@
 package actor
 
-func Register(name string, pid *PID) {
+import "github.com/hedisam/goactor/internal/pid"
+
+func Register(name string, pid *pid.ProtectedPID) {
 	Send(myPID, cmdRegister{name: name, pid: pid})
 }
 
@@ -8,11 +10,11 @@ func Unregister(name string) {
 	Send(myPID, cmdUnregister{name: name})
 }
 
-func WhereIs(name string) (pid *PID) {
+func WhereIs(name string) (ppid *pid.ProtectedPID) {
 	future := NewFutureActor()
 	Send(myPID, cmdGet{name: name, sender: future.Self()})
 	result, _ := future.Recv()
-	pid, _ = result.(*PID)
+	ppid, _ = result.(*pid.ProtectedPID)
 	return
 }
 

@@ -14,18 +14,14 @@ type Func func(actor Actor)
 
 type Actor interface {
 	TrapExit(trap bool)
-	Monitor(pid *PID)
-	Demonitor(pid *PID)
-	Link(pid *PID)
-	Unlink(pid *PID)
-	SpawnLink(fn Func, args ...interface{}) *PID
-	SpawnMonitor(fn Func, args ...interface{}) *PID
+	Monitor(pid *pid.ProtectedPID)
+	Demonitor(pid *pid.ProtectedPID)
+	Link(pid *pid.ProtectedPID)
+	Unlink(pid *pid.ProtectedPID)
+	SpawnLink(fn Func, args ...interface{}) *pid.ProtectedPID
+	SpawnMonitor(fn Func, args ...interface{}) *pid.ProtectedPID
 	Context() context.Context
-	Self() *PID
+	Self() *pid.ProtectedPID
 	handleTermination()
-}
-
-type PID struct {
-	pid pid.PID
 }
 
