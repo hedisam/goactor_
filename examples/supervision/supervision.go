@@ -10,12 +10,15 @@ import (
 )
 
 func main() {
-	pid, err := supervisor.Start(supervisor.OneForOneStrategy, supervisor.NewChildSpec("#1", child, "#1"))
+	_, err := supervisor.Start(supervisor.OneForOneStrategy,
+		supervisor.NewChildSpec("#1", child, "#1"),
+		supervisor.NewChildSpec("#2", child, "#2"),
+	)
 	if err != nil {
 		log.Fatal(err)
 	}
-	actor.Send(pid, "hello supervisor")
-	actor.SendNamed("#1", "panic")
+
+	actor.SendNamed("#1", "shutdown")
 
 	wait()
 }

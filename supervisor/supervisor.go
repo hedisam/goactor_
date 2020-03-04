@@ -24,6 +24,7 @@ const (
 )
 
 type Strategy int32
+type Init struct {sender *pid.ProtectedPID}
 
 func Start(strategy Strategy, specs ...*ChildSpec) (*pid.ProtectedPID, error) {
 	specsMap, err := specsToMap(specs)
@@ -33,6 +34,12 @@ func Start(strategy Strategy, specs ...*ChildSpec) (*pid.ProtectedPID, error) {
 
 	// spawn supervisor actor passing children specs data and the strategy as arguments
 	suPID := actor.Spawn(supervisor, specsMap, strategy)
+
+	// wait till all children are spawned
+	future := actor.NewFutureActor()
+	actor.Send(suPID, Init{sender: future.Self()})
+	_, _ = future.Recv()
+
 	return suPID, nil
 }
 
@@ -52,10 +59,6 @@ func supervisor(supervisor actor.Actor) {
 		actor.Register(name, child)
 	}
 
-	for id := range children {
-		spawn(id)
-	}
-
 	shutdown := func(name string, _pid pid.PID) {
 		// todo: close the actor context [context.Context]
 		actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
@@ -64,8 +67,17 @@ func supervisor(supervisor actor.Actor) {
 		})
 	}
 
+	init := func() {
+		for id := range children {
+			spawn(id)
+		}
+	}
+
 	supervisor.Context().Recv(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
+		case Init:
+			init()
+			actor.Send(msg.sender, "ok")
 		case sysmsg.Exit:
 			switch msg.Reason {
 			// todo: we should have a specific reason for "shutdown by supervisor"

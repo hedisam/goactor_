@@ -1,6 +1,8 @@
 package actor
 
-import "github.com/hedisam/goactor/internal/pid"
+import (
+	"github.com/hedisam/goactor/internal/pid"
+)
 
 func Register(name string, pid *pid.ProtectedPID) {
 	Send(myPID, cmdRegister{name: name, pid: pid})

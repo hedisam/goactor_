@@ -23,7 +23,7 @@ func DefaultRingBufferQueueMailbox(utils *ActorUtils) Mailbox {
 		sysMailbox:  queue.NewRingBuffer(defaultSysMailboxCap),
 		done:        make(chan struct{}),
 		status:      mailboxIdle,
-		signal:      make(chan struct{}),
+		signal:      make(chan struct{}, 10),
 		utils:       utils,
 	}
 	return &m
