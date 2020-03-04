@@ -12,11 +12,9 @@ func Send(pid *PID, message interface{}) {
 }
 
 func SendNamed(name string, message interface{}) {
-	//_pid := process.WhereIs(name)
-	//if _pid == nil {
-	//	return
-	//}
-	//Send(_pid, message)
+	_pid := WhereIs(name)
+	if _pid == nil {return}
+	Send(_pid, message)
 }
 
 func Spawn(fn Func, args ...interface{}) *PID {
