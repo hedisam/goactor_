@@ -1,7 +1,6 @@
 package supervisor
 
 import (
-	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/sysmsg"
@@ -26,7 +25,7 @@ const (
 type Strategy int32
 type Init struct {sender *pid.ProtectedPID}
 
-func Start(strategy Strategy, specs ...*ChildSpec) (*pid.ProtectedPID, error) {
+func Start(strategy Strategy, specs ...ChildSpec) (*pid.ProtectedPID, error) {
 	specsMap, err := specsToMap(specs)
 	if err != nil {
 		return nil, err
@@ -47,14 +46,14 @@ func supervisor(supervisor actor.Actor) {
 	// set trap exit since the supervisor is linked to its children
 	supervisor.TrapExit(true)
 
-	registry := map[pid.PID]string{}
+	registry := newRegistry()
 	children := supervisor.Context().Args()[0].(childSpecMap)
 	strategy := supervisor.Context().Args()[1].(Strategy)
 
 	spawn := func(name string) {
-		child := supervisor.SpawnLink(children[name].start.actorFunc, children[name].start.args...)
+		child := supervisor.SpawnLink(children[name].Start.ActorFunc, children[name].Start.Args...)
 		// register locally
-		registry[pid.ExtractPID(child)] = name
+		registry.put(pid.ExtractPID(child), name)
 		// register globally
 		actor.Register(name, child)
 	}
@@ -62,7 +61,7 @@ func supervisor(supervisor actor.Actor) {
 	shutdown := func(name string, _pid pid.PID) {
 		actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
 			Parent:   pid.ExtractPID(supervisor.Self()),
-			Shutdown: children[name].shutdown,
+			Shutdown: children[name].Shutdown,
 		})
 		_pid.Shutdown()()
 	}
@@ -81,16 +80,19 @@ func supervisor(supervisor actor.Actor) {
 		case sysmsg.Exit:
 			switch msg.Reason {
 			case sysmsg.Panic:
-				name := registry[msg.Who.(pid.PID)]
-				switch children[name].restart {
+				name, dead, found := registry.get(msg.Who.(pid.PID))
+				if dead || !found {
+					return true
+				}
+				switch children[name].Restart {
 				case RestartAlways, RestartTransient:
 					switch strategy {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						reg := copyMap(registry)
+						reg := copyMap(registry.aliveActors)
 						for _pid, id := range reg {
-							delete(registry, _pid)
+							registry.dead(_pid)
 							if id != name {
 								_pid := _pid
 								shutdown(id, _pid)
@@ -105,15 +107,18 @@ func supervisor(supervisor actor.Actor) {
 				// in result of sending a shutdown msg
 				log.Println("supervisor: kill")
 			case sysmsg.Normal:
-				name := registry[msg.Who.(pid.PID)]
-				if children[name].restart == RestartAlways {
+				name, dead, found := registry.get(msg.Who.(pid.PID))
+				if dead || !found {
+					return true
+				}
+				if children[name].Restart == RestartAlways {
 					switch strategy {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						reg := copyMap(registry)
+						reg := copyMap(registry.aliveActors)
 						for _pid, id := range reg {
-							delete(registry, _pid)
+							registry.dead(_pid)
 							if id != name {
 								_pid := _pid
 								shutdown(id, _pid)
@@ -130,29 +135,6 @@ func supervisor(supervisor actor.Actor) {
 		}
 		return true
 	})
-}
-
-func specsToMap(specs []*ChildSpec) (specsMap childSpecMap, err error) {
-	if len(specs) == 0 {
-		err = fmt.Errorf("empty childspec list")
-		return
-	}
-	specsMap = childSpecMap{}
-	for _, s := range specs {
-		if s.id == "" {
-			err = fmt.Errorf("childspec's id could not be empty")
-			break
-		} else if s.start.actorFunc == nil {
-			err = fmt.Errorf("childspec's fn(ActorFunc) could not be nil")
-			break
-		} else if _, duplicate := specsMap[s.id]; duplicate {
-			err = fmt.Errorf("duplicate childspec id")
-			break
-		}
-
-		specsMap[s.id] = *s
-	}
-	return
 }
 
 func copyMap(src map[pid.PID]string) (dst map[pid.PID]string) {

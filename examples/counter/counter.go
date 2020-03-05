@@ -29,8 +29,8 @@ func counter(actor actor.Actor) {
 	actor.Context().Recv(func(message interface{}) (loop bool) {
 		count++
 		if count == number {
-			ellapsed := time.Since(now)
-			fmt.Printf("[+] received %d messages in %v\n", count, ellapsed)
+			elapsed := time.Since(now)
+			fmt.Printf("[+] received %d messages in %v\n", count, elapsed)
 			return false
 		}
 		return true

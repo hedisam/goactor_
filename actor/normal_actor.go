@@ -157,6 +157,7 @@ func (a *actor) handleTermination() {
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {
+			//log.Println(r)
 			exit := sysmsg.Exit{
 				Who:      pid.ExtractPID(a.self),
 				Reason:   sysmsg.Panic,
