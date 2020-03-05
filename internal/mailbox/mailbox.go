@@ -30,6 +30,7 @@ type ActorUtils struct {
 	Unlink      func(pid interface{})
 	Self        func() (pid interface{})
 	TrapExit    func() bool
+	ContextDone	func() <-chan struct{}
 }
 
 type MessageHandler func(message interface{}) (loop bool)

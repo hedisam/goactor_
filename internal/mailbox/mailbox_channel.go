@@ -43,6 +43,7 @@ func (m *channelMailbox) SendSystemMessage(message interface{}) {
 }
 
 func (m *channelMailbox) Receive(handler MessageHandler) {
+	defer checkContext(m)
 loop:
 	select {
 	case msg, ok := <-m.userMailbox:
@@ -70,6 +71,7 @@ loop:
 }
 
 func (m *channelMailbox) ReceiveWithTimeout(timeout time.Duration, handler MessageHandler) {
+	defer checkContext(m)
 	timer := time.NewTimer(timeout)
 	defer stopTimer(timer)
 loop:

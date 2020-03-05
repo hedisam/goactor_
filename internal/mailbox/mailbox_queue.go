@@ -60,6 +60,7 @@ func (m *queueMailbox) SendSystemMessage(message interface{}) {
 
 func (m *queueMailbox) Receive(handler MessageHandler) {
 	// todo: handle sys messages separately
+	defer checkContext(m)
 listen:
 	select {
 	case <-m.done:
@@ -91,6 +92,7 @@ listen:
 }
 
 func (m *queueMailbox) ReceiveWithTimeout(d time.Duration, handler MessageHandler) {
+	defer checkContext(m)
 	timer := time.NewTimer(d)
 listen:
 	select {

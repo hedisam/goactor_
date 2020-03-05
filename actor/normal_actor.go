@@ -54,6 +54,9 @@ func (a *actor) setUtils(utils *mailbox.ActorUtils) {
 	utils.Self = func() interface{} {
 		return pid.ExtractPID(a.Self())
 	}
+	utils.ContextDone = func() <-chan struct{} {
+		return a.Context().Done()
+	}
 	utils.TrapExit = a.trapExited
 }
 

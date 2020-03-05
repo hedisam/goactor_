@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	simpleChildMain()
+	longRunningMain()
 
 	wait()
 }
@@ -64,7 +64,7 @@ func longRunning(actor actor.Actor) {
 func simpleChildMain() {
 	_, err := supervisor.Start(supervisor.OneForAllStrategy,
 		supervisor.NewChildSpec("#1", simpleChild, "#1").SetRestart(supervisor.RestartAlways),
-		supervisor.NewChildSpec("#2", simpleChild, "#2").SetShutdown(supervisor.ShutdownKill),
+		//supervisor.NewChildSpec("#2", simpleChild, "#2").SetShutdown(supervisor.ShutdownKill),
 		supervisor.ChildSpec{
 			Id: "#3",
 			Start: supervisor.StartSpec{
