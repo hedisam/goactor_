@@ -11,13 +11,28 @@ import (
 )
 
 func main() {
-	longRunningMain()
+	_, err := supervisor.Start(supervisor.OneForOneStrategyOption, supervisor.NewChildSpec("panik", panik))
+	if err != nil {log.Fatal(err)}
+
+	// the first start doesn't count
+	for i := 0; i < 7; i++ {
+		actor.SendNamed("panik", "hi panik, you wanna panic?")
+		time.Sleep(10 * time.Millisecond)
+	}
 
 	wait()
 }
 
+func panik(actor actor.Actor) {
+	fmt.Println("[+] panik started")
+	actor.Context().Recv(func(message interface{}) (loop bool) {
+		fmt.Println("[!] panik received:", message)
+		panic("just panic")
+	})
+}
+
 func longRunningMain() {
-	_, err := supervisor.Start(supervisor.OneForAllStrategy,
+	_, err := supervisor.Start(supervisor.OneForAllStrategyOption,
 		supervisor.NewChildSpec("#1", longRunning, "#1"),
 		supervisor.NewChildSpec("#2", longRunning, "#2"),
 	)
@@ -62,7 +77,7 @@ func longRunning(actor actor.Actor) {
 }
 
 func simpleChildMain() {
-	_, err := supervisor.Start(supervisor.OneForAllStrategy,
+	_, err := supervisor.Start(supervisor.OneForAllStrategyOption,
 		supervisor.NewChildSpec("#1", simpleChild, "#1").SetRestart(supervisor.RestartAlways),
 		//supervisor.NewChildSpec("#2", simpleChild, "#2").SetShutdown(supervisor.ShutdownKill),
 		supervisor.ChildSpec{

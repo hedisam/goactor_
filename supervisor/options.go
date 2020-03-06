@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"fmt"
 	"github.com/rs/xid"
 )
 
@@ -13,7 +14,7 @@ const (
 	OneForAllStrategy
 
 	// if a child process terminates, the terminated child process and
-	// the rest of the children started after it, are terminated and restarted.
+	// the rest of the specs started after it, are terminated and restarted.
 	RestForOneStrategy
 )
 
@@ -24,27 +25,41 @@ const (
 
 type Strategy int32
 
-type options struct {
-	strategy    Strategy
-	maxRestarts int
-	period      int
-	name        string
+type Options struct {
+	Strategy    Strategy
+	MaxRestarts int
+	Period      int
+	Name        string
 }
 
 var OneForOneStrategyOption 	= NewOptions(OneForOneStrategy, defaultMaxRestarts, defaultPeriod)
 var OneForAllStrategyOption 	= NewOptions(OneForAllStrategy, defaultMaxRestarts, defaultPeriod)
 var RestForOneStrategyOption	= NewOptions(RestForOneStrategy, defaultMaxRestarts, defaultPeriod)
 
-func NewOptions(strategy Strategy, maxRestarts, period int) *options {
-	return &options{
-		strategy:    strategy,
-		maxRestarts: maxRestarts,
-		period:      period,
-		name:        xid.New().String(),
+func NewOptions(strategy Strategy, maxRestarts, period int) Options {
+	return Options{
+		Strategy:    strategy,
+		MaxRestarts: maxRestarts,
+		Period:      period,
+		Name:        xid.New().String(),
 	}
 }
 
-func (o *options) SetName(name string) *options {
-	o.name = name
-	return o
+func (opt Options) SetName(name string) Options {
+	opt.Name = name
+	return opt
+}
+
+func (opt *Options) checkOptions() error {
+	if opt.Name == "" {
+		return fmt.Errorf("invalid supervisor Name: %s", opt.Name)
+	} else if opt.Strategy < 0 || opt.Strategy > 2 {
+		return fmt.Errorf("invalid Strategy: %d", opt.Strategy)
+	} else if opt.Period < 0 {
+		return fmt.Errorf("invalid max seconds: %d", opt.Period)
+	} else if opt.MaxRestarts < 0 {
+		return fmt.Errorf("invalid max restarts: %d", opt.MaxRestarts)
+	}
+
+	return nil
 }

@@ -10,12 +10,12 @@ type registryRepo map[pid.PID]string
 type registry struct {
 	aliveActors registryRepo
 	deadActors  registryRepo
-	options 	*options
+	options 	*Options
 	// timeTracer contains restart times as unix time
 	timeTracer map[string][]int64
 }
 
-func newRegistry(ops *options) *registry {
+func newRegistry(ops *Options) *registry {
 	return &registry{
 		aliveActors: make(registryRepo),
 		deadActors:  make(registryRepo),
@@ -57,8 +57,8 @@ func (r *registry) dead(_pid pid.PID) {
 	r.deadActors[_pid] = id
 }
 
-// reachedMaxRestarts returns true if we have restarts more that allowed in the same period
-// notice: the restarts number occurred in the same period is added by one since this method should be called just
+// reachedMaxRestarts returns true if we have restarts more that allowed in the same Period
+// notice: the restarts number occurred in the same Period is added by one since this method should be called just
 // before re-spawning an actor. so we're counting  the not-yet re-spawned one too.
 func (r *registry) reachedMaxRestarts(id string) (reached bool) {
 	restarts, ok := r.timeTracer[id]
@@ -66,22 +66,22 @@ func (r *registry) reachedMaxRestarts(id string) (reached bool) {
 		// no records yet. the actor has not been started yet.
 		return
 	}
-	// restarts that are not expired, meaning they are in the same period
+	// restarts that are not expired, meaning they are in the same Period
 	var restartsNotEx []int64
 
 	now := time.Now()
-	periodStartTime :=  now.Add(time.Duration(-r.options.period) * time.Second).Unix()
-	// check how many restarts we've got in the same period
+	periodStartTime :=  now.Add(time.Duration(-r.options.Period) * time.Second).Unix()
+	// check how many restarts we've got in the same Period
 	for _, restartTime := range restarts {
 		if restartTime >= periodStartTime {
-			// this restart has occurred in the period
+			// this restart has occurred in the Period
 			restartsNotEx = append(restartsNotEx, restartTime)
 		}
 	}
 	// added by 1. counting the next restart too that just gonna happen right
 	// after returning (if this method return false, of course)
-	if len(restartsNotEx) + 1 > r.options.maxRestarts {
-		// we got restarts more than the allowed maxRestarts in the same period
+	if len(restartsNotEx) + 1 > r.options.MaxRestarts {
+		// we got restarts more than the allowed MaxRestarts in the same Period
 		return true
 	}
 
