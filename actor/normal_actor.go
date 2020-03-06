@@ -1,7 +1,7 @@
 package actor
 
 import (
-	"github.com/hedisam/goactor/context"
+	"github.com/hedisam/goactor/internal/context"
 	"github.com/hedisam/goactor/internal/mailbox"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/sysmsg"
@@ -154,8 +154,6 @@ func (a *actor) handleTermination() {
 	// notify monitors and other linked actors
 	case sysmsg.Exit:
 		a.notifyLinkedActors(r)
-		r1 := r
-		r1.Relation = sysmsg.Monitored
 		a.notifyMonitors(r)
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
@@ -167,8 +165,6 @@ func (a *actor) handleTermination() {
 				Relation: sysmsg.Linked,
 			}
 			a.notifyLinkedActors(exit)
-			exit1 := exit
-			exit1.Relation = sysmsg.Monitored
 			a.notifyMonitors(exit)
 
 			// it's a normal exit
@@ -179,20 +175,20 @@ func (a *actor) handleTermination() {
 				Relation: sysmsg.Linked,
 			}
 			a.notifyLinkedActors(normal)
-			normal1 := normal
-			normal1.Relation = sysmsg.Monitored
-			a.notifyMonitors(normal1)
+			a.notifyMonitors(normal)
 		}
 	}
 }
 
 func (a *actor) notifyMonitors(message sysmsg.Exit) {
+	message.Relation = sysmsg.Monitored
 	for _, monitor := range a.monitorActors {
 		sendSystemMessage(pid.NewProtectedPID(monitor), message)
 	}
 }
 
 func (a *actor) notifyLinkedActors(message sysmsg.Exit) {
+	message.Relation = sysmsg.Linked
 	for _, linked := range a.linkedActors {
 		if linked != message.Parent {
 			// todo: what if the linked parent actor is a supervisor?

@@ -8,6 +8,7 @@ import (
 )
 
 // todo: implement child supervisors
+// todo: shutdown children in case of unhandled supervisor panics
 
 type Init struct {sender *pid.ProtectedPID}
 
@@ -41,6 +42,7 @@ func supervisor(supervisor actor.Actor) {
 	options := supervisor.Context().Args()[1].(*Options)
 	state := newState(specs, options, supervisor)
 
+	//todo: unlink dead actors
 	supervisor.Context().Recv(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case Init:
@@ -57,12 +59,14 @@ func supervisor(supervisor actor.Actor) {
 				case RestartAlways, RestartTransient:
 					switch state.options.Strategy {
 					case OneForOneStrategy:
-						state.spawn(name)
+						state.handleOneForOne(name, msg.Who.(pid.PID))
 					case OneForAllStrategy:
 						state.handleOneForAll(name)
 					case RestForOneStrategy:
 						state.handleRestForOne(name)
 					}
+				case RestartNever:
+					state.deadAndUnlink(msg.Who.(pid.PID))
 				}
 			case sysmsg.Kill:
 				// in result of sending a shutdown msg
@@ -72,18 +76,21 @@ func supervisor(supervisor actor.Actor) {
 				if dead || !found {
 					return true
 				}
-				if state.specs[name].Restart == RestartAlways {
+				switch state.specs[name].Restart {
+				case RestartAlways:
 					switch state.options.Strategy {
 					case OneForOneStrategy:
-						state.spawn(name)
+						state.handleOneForOne(name, msg.Who.(pid.PID))
 					case OneForAllStrategy:
 						state.handleOneForAll(name)
 					case RestForOneStrategy:
 						state.handleRestForOne(name)
 					}
+				case RestartNever, RestartTransient:
+					state.deadAndUnlink(msg.Who.(pid.PID))
 				}
 			case sysmsg.SupMaxRestart:
-				// a supervisor just killed itself because a child reaching max restarts allowed in the same Period
+				// a supervisor just killed itself because a child reached max restarts allowed in the same Period
 				log.Println("supervisor:", msg.Reason)
 			}
 		default:

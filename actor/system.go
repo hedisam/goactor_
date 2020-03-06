@@ -1,7 +1,7 @@
 package actor
 
 import (
-	"github.com/hedisam/goactor/context"
+	"github.com/hedisam/goactor/internal/context"
 	"github.com/hedisam/goactor/internal/mailbox"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/sysmsg"

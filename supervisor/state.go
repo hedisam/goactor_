@@ -24,7 +24,9 @@ func newState(specs childSpecMap, options *Options, supervisor actor.Actor) *sta
 }
 
 func (state *state) shutdown(name string, _pid pid.PID) {
-	state.registry.dead(_pid)
+	// todo: do not call deadAndUnlink if we're supposed to receive shutdown feedback
+	state.deadAndUnlink(_pid)
+
 	actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
 		Parent:   pid.ExtractPID(state.supervisor.Self()),
 		Shutdown: state.specs[name].Shutdown,
@@ -76,8 +78,9 @@ func (state *state) handleOneForAll(name string) {
 	for _pid, id := range reg {
 		_pid := _pid
 		if id == name {
-			// this actor already been terminated so no need to shut it down but we need to declare it as dead
-			state.registry.dead(_pid)
+			// this actor already has been terminated so no need to shut it down
+			// but we need to unlink and declare it dead
+			state.deadAndUnlink(_pid)
 		} else {
 			state.shutdown(id, _pid)
 		}
@@ -85,8 +88,20 @@ func (state *state) handleOneForAll(name string) {
 	}
 }
 
+func (state *state) handleOneForOne(name string, _pid pid.PID) {
+	// we need to unlink the terminated actor and declare it dead
+	state.deadAndUnlink(_pid)
+	// re-spawn
+	state.spawn(name)
+}
+
 func (state *state) handleRestForOne(name string) {
 	log.Println("supervisor: rest_for_one Strategy")
+}
+
+func (state *state) deadAndUnlink(_pid pid.PID) {
+	state.registry.dead(_pid)
+	state.supervisor.Unlink(pid.NewProtectedPID(_pid))
 }
 
 func copyMap(src map[pid.PID]string) (dst map[pid.PID]string) {
