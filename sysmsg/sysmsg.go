@@ -11,6 +11,7 @@ const (
 	Kill   Reason = "kill"
 	Panic  Reason = "panic"
 	Normal Reason = "normal"
+	SupMaxRestart Reason = "max_restarts_reached"
 )
 
 type Relation string

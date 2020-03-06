@@ -17,22 +17,19 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 				return true, msg
 			} else {
 				switch msg.Reason {
-				case sysmsg.Kill:
+				case sysmsg.Kill, sysmsg.Panic:
 					panic(sysmsg.Exit{
 						Who:      m.Utils().Self(),
 						Parent:   msg.Who,
-						Reason:   sysmsg.Kill,
-						Relation: sysmsg.Linked,
-					})
-				case sysmsg.Panic:
-					panic(sysmsg.Exit{
-						Who:      m.Utils().Self(),
-						Parent:   msg.Who,
-						Reason:   sysmsg.Panic,
+						Reason:   msg.Reason,
 						Relation: sysmsg.Linked,
 					})
 				case sysmsg.Normal:
 					// for supervisor
+					return true, msg
+				case sysmsg.SupMaxRestart:
+					// specific to supervisors when a child reaches its max restarts in a period
+					// todo: only a supervisor should catch this message. there should be a way to check that
 					return true, msg
 				}
 			}

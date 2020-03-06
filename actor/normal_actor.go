@@ -156,7 +156,7 @@ func (a *actor) handleTermination() {
 		a.notifyLinkedActors(r)
 		r1 := r
 		r1.Relation = sysmsg.Monitored
-		a.notifyLinkedActors(r)
+		a.notifyMonitors(r)
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {

@@ -1,38 +1,29 @@
 package supervisor
 
 import (
+	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
 )
 
-// todo: implement the max times a child could be restarted in a specific interval
+// todo: implement supervisors shutdown
 
-const (
-	// if a child process terminates, only that process is restarted
-	OneForOneStrategy Strategy = iota
-
-	// if a child process terminates, all other child processes are terminated
-	// and then all of them (including the terminated one) are restarted.
-	OneForAllStrategy
-
-	// if a child process terminates, the terminated child process and
-	// the rest of the children started after it, are terminated and restarted.
-	RestForOneStrategy
-)
-
-type Strategy int32
 type Init struct {sender *pid.ProtectedPID}
 
-func Start(strategy Strategy, specs ...ChildSpec) (*pid.ProtectedPID, error) {
+func Start(options options, specs ...ChildSpec) (*pid.ProtectedPID, error) {
 	specsMap, err := specsToMap(specs)
 	if err != nil {
 		return nil, err
 	}
 
+	err = checkOptions(&options)
+	if err != nil {return nil, err}
+
 	// spawn supervisor actor passing children specs data and the strategy as arguments
-	suPID := actor.Spawn(supervisor, specsMap, strategy)
+	suPID := actor.Spawn(supervisor, specsMap, options)
+	actor.Register(options.name, suPID)
 
 	// wait till all children are spawned
 	future := actor.NewFutureActor()
@@ -46,19 +37,13 @@ func supervisor(supervisor actor.Actor) {
 	// set trap exit since the supervisor is linked to its children
 	supervisor.TrapExit(true)
 
-	registry := newRegistry()
 	children := supervisor.Context().Args()[0].(childSpecMap)
-	strategy := supervisor.Context().Args()[1].(Strategy)
+	options := supervisor.Context().Args()[1].(options)
 
-	spawn := func(name string) {
-		child := supervisor.SpawnLink(children[name].Start.ActorFunc, children[name].Start.Args...)
-		// register locally
-		registry.put(pid.ExtractPID(child), name)
-		// register globally
-		actor.Register(name, child)
-	}
+	registry := newRegistry(&options)
 
 	shutdown := func(name string, _pid pid.PID) {
+		registry.dead(_pid)
 		actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
 			Parent:   pid.ExtractPID(supervisor.Self()),
 			Shutdown: children[name].Shutdown,
@@ -66,10 +51,59 @@ func supervisor(supervisor actor.Actor) {
 		_pid.Shutdown()()
 	}
 
+	maxRestartsReached := func() {
+		// shutdown all children and also the supervisor. restart the supervisor only if we have a child
+		// with restart value set to RestartAlways
+		// note: calling panic in supervisor should kill its children since they are linked but we're explicitly
+		// shutting down each one to close children's context's done channel
+		reg := copyMap(registry.aliveActors)
+		for _pid, id := range reg {
+			shutdown(id, _pid)
+		}
+
+		panic(sysmsg.Exit{
+			Who:      pid.ExtractPID(supervisor.Self()),
+			Parent:   nil,
+			Reason:   sysmsg.SupMaxRestart,
+			Relation: sysmsg.Linked,
+		})
+	}
+
+	spawn := func(name string) {
+		if registry.reachedMaxRestarts(name) {
+			maxRestartsReached()
+			return
+		}
+
+		child := supervisor.SpawnLink(children[name].Start.ActorFunc, children[name].Start.Args...)
+		// register locally
+		registry.put(pid.ExtractPID(child), name)
+		// register globally
+		actor.Register(name, child)
+	}
+
 	init := func() {
 		for id := range children {
 			spawn(id)
 		}
+	}
+
+	handleOneForAll := func(name string) {
+		reg := copyMap(registry.aliveActors)
+		for _pid, id := range reg {
+			_pid := _pid
+			if id == name {
+				// this actor already been terminated so no need to shut it down but we need to declare it as dead
+				registry.dead(_pid)
+			} else {
+				shutdown(id, _pid)
+			}
+			spawn(id)
+		}
+	}
+
+	handleRestForOne := func(name string) {
+		log.Println("supervisor: rest_for_one strategy")
 	}
 
 	supervisor.Context().Recv(func(message interface{}) (loop bool) {
@@ -86,21 +120,13 @@ func supervisor(supervisor actor.Actor) {
 				}
 				switch children[name].Restart {
 				case RestartAlways, RestartTransient:
-					switch strategy {
+					switch options.strategy {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						reg := copyMap(registry.aliveActors)
-						for _pid, id := range reg {
-							registry.dead(_pid)
-							if id != name {
-								_pid := _pid
-								shutdown(id, _pid)
-							}
-							spawn(id)
-						}
+						handleOneForAll(name)
 					case RestForOneStrategy:
-						log.Println("implement RestartForOneStrategy")
+						handleRestForOne(name)
 					}
 				}
 			case sysmsg.Kill:
@@ -112,23 +138,18 @@ func supervisor(supervisor actor.Actor) {
 					return true
 				}
 				if children[name].Restart == RestartAlways {
-					switch strategy {
+					switch options.strategy {
 					case OneForOneStrategy:
 						spawn(name)
 					case OneForAllStrategy:
-						reg := copyMap(registry.aliveActors)
-						for _pid, id := range reg {
-							registry.dead(_pid)
-							if id != name {
-								_pid := _pid
-								shutdown(id, _pid)
-							}
-							spawn(id)
-						}
+						handleOneForAll(name)
 					case RestForOneStrategy:
-						panic("implement RestForOneStrategy")
+						handleRestForOne(name)
 					}
 				}
+			case sysmsg.SupMaxRestart:
+				// a supervisor just killed itself because a child reaching max restarts allowed in the same period
+				log.Println("supervisor:", msg.Reason)
 			}
 		default:
 			log.Println("supervisor received unknown message:", msg)
@@ -143,4 +164,19 @@ func copyMap(src map[pid.PID]string) (dst map[pid.PID]string) {
 		dst[k] = v
 	}
 	return
+}
+
+// todo: we should register system processes on a different process registry
+func checkOptions(options *options) error {
+	if options.name == "" {
+		return fmt.Errorf("invalid supervisor name: %s", options.name)
+	} else if options.strategy < 0 || options.strategy > 2 {
+		return fmt.Errorf("invalid strategy: %d", options.strategy)
+	} else if options.period < 0 {
+		return fmt.Errorf("invalid max seconds: %d", options.period)
+	} else if options.maxRestarts < 0 {
+		return fmt.Errorf("invalid max restarts: %d", options.maxRestarts)
+	}
+
+	return nil
 }
