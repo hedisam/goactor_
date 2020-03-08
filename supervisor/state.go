@@ -31,7 +31,7 @@ func (state *state) shutdown(name string, _pid pid.PID) {
 		Parent:   pid.ExtractPID(state.supervisor.Self()),
 		Shutdown: state.specs[name].Shutdown,
 	})
-	_pid.Shutdown()()
+	_pid.ShutdownFn()()
 }
 
 func (state *state) maxRestartsReached() {

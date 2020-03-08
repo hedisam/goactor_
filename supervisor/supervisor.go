@@ -8,7 +8,6 @@ import (
 )
 
 // todo: implement child supervisors
-// todo: shutdown children in case of unhandled supervisor panics
 
 type Init struct {sender *pid.ProtectedPID}
 
@@ -23,6 +22,7 @@ func Start(options Options, specs ...ChildSpec) (*pid.ProtectedPID, error) {
 
 	// spawn supervisor actor passing specs specs data and options as arguments
 	suPID := actor.Spawn(supervisor, specsMap, &options)
+	pid.ExtractPID(suPID).ActorTypeFn()(actor.SupervisorActor)
 	// todo: register supervisors on a different process registry
 	actor.Register(options.Name, suPID)
 
@@ -35,14 +35,13 @@ func Start(options Options, specs ...ChildSpec) (*pid.ProtectedPID, error) {
 }
 
 func supervisor(supervisor actor.Actor) {
-	// set trap exit since the supervisor is linked to its specs
+	// set trap exit since the supervisor is linked to its children
 	supervisor.TrapExit(true)
 
 	specs := supervisor.Context().Args()[0].(childSpecMap)
 	options := supervisor.Context().Args()[1].(*Options)
 	state := newState(specs, options, supervisor)
 
-	//todo: unlink dead actors
 	supervisor.Context().Recv(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case Init:

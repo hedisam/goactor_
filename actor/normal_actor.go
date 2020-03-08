@@ -16,26 +16,32 @@ type actor struct {
 	// actors that are monitoring me. one way communication
 	monitorActors map[pid.PID]pid.PID
 	self          *pid.ProtectedPID
+	// actor type: WorkerActor or SupervisorActor
+	aType	int32
 }
 
-func newActor(ctx context.Context, utils *mailbox.ActorUtils) *actor {
+func newActor(ctx context.Context, _pid pid.PID , utils *mailbox.ActorUtils) Actor {
 	actor := &actor{
 		context:       ctx,
 		trapExit:      trapExitNo,
 		linkedActors:  make(map[pid.PID]pid.PID),
 		monitorActors: make(map[pid.PID]pid.PID),
+		self:          pid.NewProtectedPID(_pid),
+		aType:         WorkerActor,
 	}
 	actor.setUtils(utils)
+	_pid.SetActorTypeFn(actor.setActorType)
 	return actor
 }
 
-func (a *actor) withPID(_pid pid.PID) *actor {
-	a.self = pid.NewProtectedPID(_pid)
-	return a
+// setActorType sets actor type to WorkerActor == 0 or SupervisorActor == 1
+// default is WorkerActor
+func (a *actor) setActorType(_type int32) {
+	atomic.StoreInt32(&a.aType, _type)
 }
 
-func (a *actor) build() Actor {
-	return a
+func (a *actor) actorType() int32 {
+	return atomic.LoadInt32(&a.aType)
 }
 
 func (a *actor) setUtils(utils *mailbox.ActorUtils) {
@@ -153,7 +159,7 @@ func (a *actor) handleTermination() {
 	// a linked actor terminated or got a sysmsg.Shutdown command by a supervisor
 	// notify monitors and other linked actors
 	case sysmsg.Exit:
-		a.notifyLinkedActors(r)
+		a.notifyLinkedActors(r, false)
 		a.notifyMonitors(r)
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
@@ -164,7 +170,11 @@ func (a *actor) handleTermination() {
 				Reason:   sysmsg.Panic,
 				Relation: sysmsg.Linked,
 			}
-			a.notifyLinkedActors(exit)
+
+			// check if the actor is a supervisor, if so, then it had an unexpected panic and got no chances to
+			// shutdown its children
+			shutdownChildren := a.actorType() == SupervisorActor
+			a.notifyLinkedActors(exit, shutdownChildren)
 			a.notifyMonitors(exit)
 
 			// it's a normal exit
@@ -174,7 +184,7 @@ func (a *actor) handleTermination() {
 				Reason:   sysmsg.Normal,
 				Relation: sysmsg.Linked,
 			}
-			a.notifyLinkedActors(normal)
+			a.notifyLinkedActors(normal, false)
 			a.notifyMonitors(normal)
 		}
 	}
@@ -187,12 +197,15 @@ func (a *actor) notifyMonitors(message sysmsg.Exit) {
 	}
 }
 
-func (a *actor) notifyLinkedActors(message sysmsg.Exit) {
+func (a *actor) notifyLinkedActors(message sysmsg.Exit, shutdown bool) {
 	message.Relation = sysmsg.Linked
 	for _, linked := range a.linkedActors {
 		if linked != message.Parent {
 			// todo: what if the linked parent actor is a supervisor?
 			sendSystemMessage(pid.NewProtectedPID(linked), message)
+			if shutdown {
+				linked.ShutdownFn()()
+			}
 		}
 	}
 }

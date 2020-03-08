@@ -7,10 +7,14 @@ import (
 type PID interface {
 	Mailbox() mailbox.Mailbox
 
-	// Shutdown() returns a function that can be used to close the context's done channel.
+	// ShutdownFn() returns a function that can be used to close the context's done channel.
 	// used by supervisor when shutting down an actor
-	Shutdown() func()
-	SetShutdown(fn func())
+	ShutdownFn() func()
+	SetShutdownFn(fn func())
+
+	// default actor type is "child", but it could be a supervisor too.
+	SetActorTypeFn(fn func(int32))
+	ActorTypeFn() func(int32)
 }
 
 type ProtectedPID struct {

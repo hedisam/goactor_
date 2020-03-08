@@ -18,7 +18,7 @@ func NewContext(pid pid.PID, args []interface{}) Context {
 		args: args,
 		done: make(chan struct{}),
 	}
-	pid.SetShutdown(func() {
+	pid.SetShutdownFn(func() {
 		close(ctx.done)
 	})
 	return ctx

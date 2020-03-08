@@ -21,9 +21,9 @@ func Spawn(fn Func, args ...interface{}) *pid.ProtectedPID {
 	utils := &mailbox.ActorUtils{}
 	_pid := pid.NewPID(utils)
 	ctx := context.NewContext(_pid, args)
-	actor := newActor(ctx, utils).withPID(_pid)
+	actor := newActor(ctx, _pid, utils)
 	spawn(fn, actor)
-	return pid.NewProtectedPID(_pid)
+	return actor.Self()
 }
 
 func spawn(fn Func, actor Actor) {

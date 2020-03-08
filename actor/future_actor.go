@@ -22,13 +22,13 @@ func (f *futureActor) Self() *pid.ProtectedPID {
 	return pid.NewProtectedPID(f.pid)
 }
 
-func (f *futureActor) Monitor(_pid *pid.ProtectedPID) {
+func (f *futureActor) monitor(_pid *pid.ProtectedPID) {
 	request := sysmsg.Monitor{Parent: pid.ExtractPID(_pid)}
 	sendSystemMessage(_pid, request)
 }
 
-func (f *futureActor) SendAndMonitor(pid *pid.ProtectedPID, message interface{}) {
-	f.Monitor(pid)
+func (f *futureActor) Send(pid *pid.ProtectedPID, message interface{}) {
+	f.monitor(pid)
 	Send(pid, message)
 }
 

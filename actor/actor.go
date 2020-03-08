@@ -10,6 +10,12 @@ const (
 	trapExitYes
 )
 
+const (
+	// actor types
+	WorkerActor int32 = iota
+	SupervisorActor
+)
+
 type Func func(actor Actor)
 
 type Actor interface {
@@ -23,5 +29,7 @@ type Actor interface {
 	Context() context.Context
 	Self() *pid.ProtectedPID
 	handleTermination()
+	setActorType(_type int32)
+	actorType() int32
 }
 
