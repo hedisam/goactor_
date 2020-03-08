@@ -18,11 +18,11 @@ func (f *futurePID) Mailbox() mailbox.Mailbox {
 	return f.mailbox
 }
 
-// we don't need the following methods for the future actor
-
 func (f *futurePID) ShutdownFn() func() {
 	return f.shutdown
 }
+
+// we don't need the following methods for the future actor
 
 func (f *futurePID) SetShutdownFn(shutdown func()) {
 	f.shutdown = shutdown
@@ -34,4 +34,10 @@ func (f *futurePID) SetActorTypeFn(fn func(actorType int32)) {
 
 func (f *futurePID) ActorTypeFn() func(int32) {
 	return f.actorType
+}
+
+func (f *futurePID) SetSupervisorFn(fn func(pid PID)) {
+}
+
+func (f *futurePID) SupervisorFn() func(pid PID) {
 }

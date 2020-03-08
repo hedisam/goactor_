@@ -24,12 +24,13 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 						Reason:   msg.Reason,
 						Relation: sysmsg.Linked,
 					})
+
+				// actually there's no need for the following cases, because a supervisor traps exit messages and
+				// receives all em including Normal and SupMaxRestarts
 				case sysmsg.Normal:
 					// for supervisor
 					return true, msg
 				case sysmsg.SupMaxRestart:
-					// specific to supervisors when a child reaches its max restarts in a period
-					// todo: only a supervisor should catch this message. there should be a way to check that
 					return true, msg
 				}
 			}
@@ -72,9 +73,9 @@ func checkContext(m Mailbox) {
 		// * the system message handler could've handled this already by panic(Exit) and since we have deferred
 		// this function, we would catch that too.
 		// * the user could've be doing some long running task and listened for the context's done channel then
-		// returning false, meaning that the ShutdownFn command has never been processed by the system handler. in such a
+		// returning false, meaning that the Shutdown command has never been processed by the system handler. in such a
 		// case we should trigger panic(Exit) and that's the point of this code snippet.
-		// * the user could've get the ShutdownFn command by setting trap exit and then returning,
+		// * the user could've get the Shutdown command by setting trap exit and then returning,
 		// in that case we're not gonna do anything.
 		if r := recover(); r != nil {
 			// already handled by the system handler. panic again since we've recovered from the previous one.
@@ -83,11 +84,10 @@ func checkContext(m Mailbox) {
 			// because of a new panic)
 			panic(r)
 		} else if m.Utils().TrapExit() {
-			// nothing to do
+			// handled by user
 			return
 		} else {
-			// we can't access the parent which is a supervisor. that's why this message will be received by the supervisor.
-			// note: in actor's handleTermination we don't notify linked actors[supervisor] causing the exit or termination.
+			// we don't have a ref to the parent supervisor
 			panic(sysmsg.Exit{
 				Who:      m.Utils().Self,
 				Parent:   nil,
@@ -96,6 +96,6 @@ func checkContext(m Mailbox) {
 			})
 		}
 	default:
-		// got nothing to do
+		// context's done channel is not closed
 	}
 }

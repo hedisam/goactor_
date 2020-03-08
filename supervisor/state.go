@@ -35,8 +35,7 @@ func (state *state) shutdown(name string, _pid pid.PID) {
 }
 
 func (state *state) maxRestartsReached() {
-	// shutdown all specs and also the supervisor. restart the supervisor only if we have a child
-	// with restart value set to RestartAlways
+	// shutdown all specs and also the supervisor.
 	// note: calling panic in supervisor should kill its specs since they are linked but we're explicitly
 	// shutting down each one to close specs's context's done channel
 	reg := copyMap(state.registry.aliveActors)
@@ -60,6 +59,7 @@ func (state *state) spawn(name string) {
 	}
 
 	childPID := state.supervisor.SpawnLink(state.specs[name].Start.ActorFunc, state.specs[name].Start.Args...)
+	pid.ExtractPID(childPID).SupervisorFn()(pid.ExtractPID(state.supervisor.Self()))
 	// register locally
 	state.registry.put(pid.ExtractPID(childPID), name)
 	// register globally

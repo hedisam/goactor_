@@ -38,7 +38,6 @@ func (m *queueMailbox) SendUserMessage(message interface{}) {
 	case <-m.done:
 		return
 	default:
-		// todo: should we return the error? probably yes
 		err := m.userMailbox.Put(message)
 		if err != nil {
 			log.Println("queue_mailbox put error:", err)

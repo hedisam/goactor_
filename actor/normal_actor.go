@@ -18,6 +18,7 @@ type actor struct {
 	self          *pid.ProtectedPID
 	// actor type: WorkerActor or SupervisorActor
 	aType	int32
+	supervisedBy	pid.PID
 }
 
 func newActor(ctx context.Context, _pid pid.PID , utils *mailbox.ActorUtils) Actor {
@@ -31,7 +32,18 @@ func newActor(ctx context.Context, _pid pid.PID , utils *mailbox.ActorUtils) Act
 	}
 	actor.setUtils(utils)
 	_pid.SetActorTypeFn(actor.setActorType)
+	_pid.SetSupervisorFn(actor.setSupervisor)
 	return actor
+}
+
+// setSupervisor must only be called once, right after spawning by a supervisor
+func (a *actor) setSupervisor(_pid pid.PID) {
+	a.supervisedBy = _pid
+}
+
+// supervisor only needed when handling termination, notifying linked actors
+func (a *actor) supervisor() pid.PID {
+	return a.supervisedBy
 }
 
 // setActorType sets actor type to WorkerActor == 0 or SupervisorActor == 1
@@ -161,6 +173,15 @@ func (a *actor) handleTermination() {
 	case sysmsg.Exit:
 		a.notifyLinkedActors(r, false)
 		a.notifyMonitors(r)
+	case sysmsg.Shutdown:
+		// there's a case where user trap exit and receives the sysmsg.Shutdown msg then returns with same msg
+		exit := sysmsg.Exit{
+			Who:      a.self,
+			Parent:   r.Parent,
+			Reason:   sysmsg.Kill,
+		}
+		a.notifyLinkedActors(exit, false)
+		a.notifyMonitors(exit)
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {
@@ -168,7 +189,6 @@ func (a *actor) handleTermination() {
 			exit := sysmsg.Exit{
 				Who:      pid.ExtractPID(a.self),
 				Reason:   sysmsg.Panic,
-				Relation: sysmsg.Linked,
 			}
 
 			// check if the actor is a supervisor, if so, then it had an unexpected panic and got no chances to
@@ -182,7 +202,6 @@ func (a *actor) handleTermination() {
 			normal := sysmsg.Exit{
 				Who:      pid.ExtractPID(a.self),
 				Reason:   sysmsg.Normal,
-				Relation: sysmsg.Linked,
 			}
 			a.notifyLinkedActors(normal, false)
 			a.notifyMonitors(normal)
@@ -200,12 +219,10 @@ func (a *actor) notifyMonitors(message sysmsg.Exit) {
 func (a *actor) notifyLinkedActors(message sysmsg.Exit, shutdown bool) {
 	message.Relation = sysmsg.Linked
 	for _, linked := range a.linkedActors {
-		if linked != message.Parent {
-			// todo: what if the linked parent actor is a supervisor?
-			sendSystemMessage(pid.NewProtectedPID(linked), message)
-			if shutdown {
-				linked.ShutdownFn()()
-			}
+		sendSystemMessage(pid.NewProtectedPID(linked), message)
+		// we can't shutdown a parent supervisor
+		if shutdown && a.supervisor() != linked {
+			linked.ShutdownFn()()
 		}
 	}
 }

@@ -6,6 +6,7 @@ type localPID struct {
 	m mailbox.Mailbox
 	shutdown func()
 	actorType func(int32)
+	supervisorSetter func(PID)
 }
 
 func NewPID(utils *mailbox.ActorUtils) PID {
@@ -32,4 +33,12 @@ func (pid *localPID) SetActorTypeFn(fn func(int32)) {
 
 func (pid *localPID) ActorTypeFn() func(int32) {
 	return pid.actorType
+}
+
+func (pid *localPID) SetSupervisorFn(fn func(pid PID)) {
+	pid.supervisorSetter = fn
+}
+
+func (pid *localPID) SupervisorFn() func(pid PID) {
+	return pid.supervisorSetter
 }

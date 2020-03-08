@@ -15,6 +15,9 @@ type PID interface {
 	// default actor type is "child", but it could be a supervisor too.
 	SetActorTypeFn(fn func(int32))
 	ActorTypeFn() func(int32)
+
+	SetSupervisorFn(fn func(pid PID))
+	SupervisorFn() func(pid PID)
 }
 
 type ProtectedPID struct {

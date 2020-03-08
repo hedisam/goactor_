@@ -29,7 +29,5 @@ type Actor interface {
 	Context() context.Context
 	Self() *pid.ProtectedPID
 	handleTermination()
-	setActorType(_type int32)
-	actorType() int32
 }
 
