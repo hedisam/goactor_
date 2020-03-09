@@ -14,7 +14,7 @@ const (
 	OneForAllStrategy
 
 	// if a child process terminates, the terminated child process and
-	// the rest of the specs started after it, are terminated and restarted.
+	// the rest of the spec started after it, are terminated and restarted.
 	RestForOneStrategy
 )
 
@@ -32,9 +32,18 @@ type Options struct {
 	Name        string
 }
 
-var OneForOneStrategyOption 	= NewOptions(OneForOneStrategy, defaultMaxRestarts, defaultPeriod)
-var OneForAllStrategyOption 	= NewOptions(OneForAllStrategy, defaultMaxRestarts, defaultPeriod)
-var RestForOneStrategyOption	= NewOptions(RestForOneStrategy, defaultMaxRestarts, defaultPeriod)
+func OneForOneStrategyOption() Options {
+	return NewOptions(OneForOneStrategy, defaultMaxRestarts, defaultPeriod)
+}
+
+func OneForAllStrategyOption() Options {
+	return NewOptions(OneForAllStrategy, defaultMaxRestarts, defaultPeriod)
+}
+
+func RestForOneStrategyOption() Options {
+	return NewOptions(RestForOneStrategy, defaultMaxRestarts, defaultPeriod)
+}
+
 
 func NewOptions(strategy Strategy, maxRestarts, period int) Options {
 	return Options{
@@ -55,7 +64,7 @@ func (opt *Options) checkOptions() error {
 		return fmt.Errorf("invalid supervisor Name: %s", opt.Name)
 	} else if opt.Strategy < 0 || opt.Strategy > 2 {
 		return fmt.Errorf("invalid Strategy: %d", opt.Strategy)
-	} else if opt.Period < 0 {
+	} else if opt.Period < 1 {
 		return fmt.Errorf("invalid max seconds: %d", opt.Period)
 	} else if opt.MaxRestarts < 0 {
 		return fmt.Errorf("invalid max restarts: %d", opt.MaxRestarts)

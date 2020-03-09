@@ -40,4 +40,5 @@ func (f *futurePID) SetSupervisorFn(fn func(pid PID)) {
 }
 
 func (f *futurePID) SupervisorFn() func(pid PID) {
+	return nil
 }

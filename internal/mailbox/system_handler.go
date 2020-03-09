@@ -24,14 +24,6 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 						Reason:   msg.Reason,
 						Relation: sysmsg.Linked,
 					})
-
-				// actually there's no need for the following cases, because a supervisor traps exit messages and
-				// receives all em including Normal and SupMaxRestarts
-				case sysmsg.Normal:
-					// for supervisor
-					return true, msg
-				case sysmsg.SupMaxRestart:
-					return true, msg
 				}
 			}
 		}

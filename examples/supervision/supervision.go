@@ -11,16 +11,23 @@ import (
 )
 
 func main() {
-	_, err := supervisor.Start(supervisor.OneForOneStrategyOption, supervisor.NewChildSpec("panik", panik))
-	if err != nil {log.Fatal(err)}
+	maxRestartsMain()
 
-	// the first start doesn't count
+	wait()
+}
+
+func maxRestartsMain() {
+	options := supervisor.NewOptions(supervisor.OneForOneStrategy, 2, 3)
+	_, err := supervisor.Start(options, supervisor.NewChildSpec("panik", panik))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// the first start doesn't count when counting max allowed restarts (a start is not a restart)
 	for i := 0; i < 7; i++ {
 		actor.SendNamed("panik", "hi panik, you wanna panic?")
 		time.Sleep(10 * time.Millisecond)
 	}
-
-	wait()
 }
 
 func panik(actor actor.Actor) {
@@ -32,7 +39,7 @@ func panik(actor actor.Actor) {
 }
 
 func longRunningMain() {
-	_, err := supervisor.Start(supervisor.OneForAllStrategyOption,
+	_, err := supervisor.Start(supervisor.OneForAllStrategyOption(),
 		supervisor.NewChildSpec("#1", longRunning, "#1"),
 		supervisor.NewChildSpec("#2", longRunning, "#2"),
 	)
@@ -77,7 +84,7 @@ func longRunning(actor actor.Actor) {
 }
 
 func simpleChildMain() {
-	_, err := supervisor.Start(supervisor.OneForAllStrategyOption,
+	_, err := supervisor.Start(supervisor.OneForAllStrategyOption(),
 		supervisor.NewChildSpec("#1", simpleChild, "#1").SetRestart(supervisor.RestartAlways),
 		//supervisor.NewChildSpec("#2", simpleChild, "#2").SetShutdown(supervisor.ShutdownKill),
 		supervisor.ChildSpec{

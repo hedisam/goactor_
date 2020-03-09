@@ -20,13 +20,13 @@ func Start(options Options, specs ...ChildSpec) (*pid.ProtectedPID, error) {
 	err = options.checkOptions()
 	if err != nil {return nil, err}
 
-	// spawn supervisor actor passing specs specs data and options as arguments
+	// spawn supervisor actor passing spec data and options as arguments
 	suPID := actor.Spawn(supervisor, specsMap, &options)
 	pid.ExtractPID(suPID).ActorTypeFn()(actor.SupervisorActor)
 	// todo: register supervisors on a different process registry
 	actor.Register(options.Name, suPID)
 
-	// wait till all specs are spawned
+	// wait till all spec are spawned
 	future := actor.NewFutureActor()
 	actor.Send(suPID, Init{sender: future.Self()})
 	_, _ = future.Recv()

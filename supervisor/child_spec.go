@@ -9,8 +9,8 @@ type ChildType int32
 type childSpecMap map[string]ChildSpec
 
 const (
-	Worker ChildType = iota
-	Supervisor
+	TypeWorker ChildType = iota
+	TypeSupervisor
 )
 
 const (
@@ -44,7 +44,7 @@ func NewChildSpec(id string, fn actor.Func, args ...interface{}) ChildSpec {
 		Start:     StartSpec{ActorFunc: fn, Args: args},
 		Restart:   RestartTransient,
 		Shutdown:  ShutdownKill,
-		ChildType: Worker,
+		ChildType: TypeWorker,
 	}
 }
 
@@ -85,7 +85,7 @@ func specsToMap(specs []ChildSpec) (specsMap childSpecMap, err error) {
 		} else if s.Shutdown < ShutdownInfinity {
 			err = fmt.Errorf("invalid childspec's shutdown value: %v, id %s", s.Shutdown, s.Id)
 			return
-		} else if s.ChildType != Worker && s.ChildType != Supervisor {
+		} else if s.ChildType != TypeWorker && s.ChildType != TypeSupervisor {
 			err = fmt.Errorf("invalid child type: %v, id %s", s.ChildType, s.Id)
 			return
 		}

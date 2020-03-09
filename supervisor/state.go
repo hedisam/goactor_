@@ -35,9 +35,9 @@ func (state *state) shutdown(name string, _pid pid.PID) {
 }
 
 func (state *state) maxRestartsReached() {
-	// shutdown all specs and also the supervisor.
-	// note: calling panic in supervisor should kill its specs since they are linked but we're explicitly
-	// shutting down each one to close specs's context's done channel
+	// shutdown all spec and also the supervisor.
+	// note: calling panic in supervisor should kill its children since they are linked but we're explicitly
+	// shutting down each one to close child's context's done channel
 	reg := copyMap(state.registry.aliveActors)
 	for _pid, id := range reg {
 		state.shutdown(id, _pid)

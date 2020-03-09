@@ -13,7 +13,7 @@ func main() {
 	actor.SendNamed("echo", "hi")
 
 	pid2 := actor.WhereIs("echo")
-	actor.Send(pid2, "hi again")
+	actor.Send(pid2, "shutdown")
 
 	time.Sleep(1 * time.Second)
 }
