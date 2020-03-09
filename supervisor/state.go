@@ -3,18 +3,19 @@ package supervisor
 import (
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/internal/pid"
+	"github.com/hedisam/goactor/supervisor/spec"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
 )
 
 type state struct {
-	specs      childSpecMap
+	specs      spec.SpecsMap
 	options    *Options
 	registry   *registry
 	supervisor actor.Actor
 }
 
-func newState(specs childSpecMap, options *Options, supervisor actor.Actor) *state {
+func newState(specs spec.SpecsMap, options *Options, supervisor actor.Actor) *state {
 	return &state{
 		specs: specs,
 		options: options,
@@ -29,7 +30,7 @@ func (state *state) shutdown(name string, _pid pid.PID) {
 
 	actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
 		Parent:   pid.ExtractPID(state.supervisor.Self()),
-		Shutdown: state.specs[name].Shutdown,
+		Shutdown: state.specs.Shutdown(name),
 	})
 	_pid.ShutdownFn()()
 }
@@ -52,24 +53,42 @@ func (state *state) maxRestartsReached() {
 	})
 }
 
-func (state *state) spawn(name string) {
+func (state *state) spawn(name string) (err error) {
 	if state.registry.reachedMaxRestarts(name) {
 		state.maxRestartsReached()
 		return
 	}
 
-	childPID := state.supervisor.SpawnLink(state.specs[name].Start.ActorFunc, state.specs[name].Start.Args...)
-	pid.ExtractPID(childPID).SupervisorFn()(pid.ExtractPID(state.supervisor.Self()))
+	var ppid *pid.ProtectedPID
+	switch state.specs.Type(name) {
+	case spec.TypeWorker:
+		start := state.specs.WorkerStartSpec(name)
+		ppid = state.supervisor.SpawnLink(start.ActorFunc, start.Args...)
+	case spec.TypeSupervisor:
+		startLink := state.specs.SupervisorStartLink(name)
+		ref, err := startLink(state.specs.SupervisorChildren(name)...)
+		if err != nil {return err}
+		ppid = ref.PPID
+		state.supervisor.Link(ppid)
+	default:
+		panic("invalid spec type when spawning child")
+	}
+	pid.ExtractPID(ppid).SupervisorFn()(pid.ExtractPID(state.supervisor.Self()))
 	// register locally
-	state.registry.put(pid.ExtractPID(childPID), name)
+	state.registry.put(pid.ExtractPID(ppid), name)
 	// register globally
-	actor.Register(name, childPID)
+	actor.Register(name, ppid)
+	return
 }
 
-func (state *state) init() {
+func (state *state) init() (err error) {
 	for id := range state.specs {
-		state.spawn(id)
+		err = state.spawn(id)
+		if err != nil {
+			return
+		}
 	}
+	return
 }
 
 

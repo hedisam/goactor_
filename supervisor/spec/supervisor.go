@@ -1,6 +1,11 @@
 package spec
 
-type StartLink func() (*Ref, error)
+import (
+	"github.com/hedisam/goactor/supervisor/ref"
+	"github.com/rs/xid"
+)
+
+type StartLink func(specs ...Spec) (*ref.Ref, error)
 
 type SupervisorSpec struct {
 	Id        string
@@ -10,16 +15,35 @@ type SupervisorSpec struct {
 	Shutdown  int32
 }
 
-func (w SupervisorSpec) ChildSpec() Spec {
-	return w
+func NewSupervisorSpec(start StartLink, childSpecs ...Spec) SupervisorSpec {
+	return SupervisorSpec{
+		Id:        xid.New().String(),
+		Children:  childSpecs,
+		StartLink: start,
+		Restart:   RestartTransient,
+		Shutdown:  ShutdownKill,
+	}
 }
 
-func (w SupervisorSpec) SetRestart(restart int32) SupervisorSpec {
-	w.Restart = restart
-	return w
+func (sup SupervisorSpec) ChildSpec() Spec {
+	return sup
 }
 
-func (w SupervisorSpec) SetShutdown(shutdown int32) SupervisorSpec {
-	w.Shutdown = shutdown
-	return w
+func (sup SupervisorSpec) SetId(id string) SupervisorSpec {
+	sup.Id = id
+	return sup
+}
+
+func (sup SupervisorSpec) SetRestart(restart int32) SupervisorSpec {
+	sup.Restart = restart
+	return sup
+}
+
+func (sup SupervisorSpec) SetShutdown(shutdown int32) SupervisorSpec {
+	sup.Shutdown = shutdown
+	return sup
+}
+
+func (sup SupervisorSpec) Type() ChildType {
+	return TypeSupervisor
 }

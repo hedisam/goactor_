@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/supervisor"
+	"github.com/hedisam/goactor/supervisor/spec"
 	"log"
 	"os"
 	"os/signal"
@@ -11,14 +12,14 @@ import (
 )
 
 func main() {
-	maxRestartsMain()
+	supervisionTreeMain()
 
 	wait()
 }
 
 func maxRestartsMain() {
 	options := supervisor.NewOptions(supervisor.OneForOneStrategy, 2, 3)
-	_, err := supervisor.Start(options, supervisor.NewChildSpec("panik", panik))
+	_, err := supervisor.Start(options, spec.NewWorkerSpec("panik", panik))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -40,8 +41,8 @@ func panik(actor actor.Actor) {
 
 func longRunningMain() {
 	_, err := supervisor.Start(supervisor.OneForAllStrategyOption(),
-		supervisor.NewChildSpec("#1", longRunning, "#1"),
-		supervisor.NewChildSpec("#2", longRunning, "#2"),
+		spec.NewWorkerSpec("#1", longRunning, "#1"),
+		spec.NewWorkerSpec("#2", longRunning, "#2"),
 	)
 	if err != nil {
 		log.Fatal(err)
@@ -85,11 +86,11 @@ func longRunning(actor actor.Actor) {
 
 func simpleChildMain() {
 	_, err := supervisor.Start(supervisor.OneForAllStrategyOption(),
-		supervisor.NewChildSpec("#1", simpleChild, "#1").SetRestart(supervisor.RestartAlways),
-		//supervisor.NewChildSpec("#2", simpleChild, "#2").SetShutdown(supervisor.ShutdownKill),
-		supervisor.ChildSpec{
+		spec.NewWorkerSpec("#1", simpleChild, "#1").SetRestart(spec.RestartAlways),
+		//spec.NewWorkerSpec("#2", simpleChild, "#2").SetShutdown(spec.ShutdownKill),
+		spec.WorkerSpec{
 			Id: "#3",
-			Start: supervisor.StartSpec{
+			Start: spec.WorkerStartSpec{
 				ActorFunc: simpleChild,
 				Args:      []interface{}{"#3"},
 			},

@@ -9,6 +9,7 @@ import (
 type actorContext struct {
 	pid  pid.PID
 	args []interface{}
+	// use context.Context instead of done channel
 	done chan struct{}
 }
 

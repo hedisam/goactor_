@@ -16,6 +16,15 @@ type WorkerStartSpec struct {
 	Args      []interface{}
 }
 
+func NewWorkerSpec(name string, fn actor.Func, args ...interface{}) WorkerSpec {
+	return WorkerSpec{
+		Id:       name,
+		Start:    WorkerStartSpec{ActorFunc: fn, Args: args},
+		Restart:  0,
+		Shutdown: 0,
+	}
+}
+
 func (w WorkerSpec) ChildSpec() Spec {
 	return w
 }
@@ -28,4 +37,8 @@ func (w WorkerSpec) SetRestart(restart int32) WorkerSpec {
 func (w WorkerSpec) SetShutdown(shutdown int32) WorkerSpec {
 	w.Shutdown = shutdown
 	return w
+}
+
+func (w WorkerSpec) Type() ChildType {
+	return TypeWorker
 }
