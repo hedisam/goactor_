@@ -5,6 +5,8 @@ import (
 	"github.com/hedisam/goactor/internal/mailbox"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/sysmsg"
+	"log"
+	"reflect"
 	"sync/atomic"
 )
 
@@ -181,34 +183,33 @@ func (a *Actor) handleTermination() {
 		exit := sysmsg.Exit{
 			Who:      a.self,
 			Parent:   r.Parent,
-			Reason:   sysmsg.Kill,
+			Reason:   sysmsg.Reason{Type: sysmsg.Kill, Details: "shutdown cmd received from supervisor"},
 		}
 		a.notifyLinkedActors(exit, false)
 		a.notifyMonitors(exit)
 	default:
 		// something went wrong. notify monitors and linked actors with an Exit msg
 		if r != nil {
-			//log.Println(r)
 			exit := sysmsg.Exit{
 				Who:      pid.ExtractPID(a.self),
-				Reason:   sysmsg.Panic,
+				Reason:   sysmsg.Reason{Type: sysmsg.Panic, Details: r},
 			}
-
 			// check if the Actor is a supervisor, if so, then it had an unexpected panic and got no chances to
 			// shutdown its children
 			shutdownChildren := a.actorType() == SupervisorActor
 			a.notifyLinkedActors(exit, shutdownChildren)
 			a.notifyMonitors(exit)
-
-			// it's a normal exit
-		} else {
-			normal := sysmsg.Exit{
-				Who:      pid.ExtractPID(a.self),
-				Reason:   sysmsg.Normal,
-			}
-			a.notifyLinkedActors(normal, false)
-			a.notifyMonitors(normal)
+			return
 		}
+		// it's a normal exit
+		normal := sysmsg.Exit{
+			Who:      pid.ExtractPID(a.self),
+			Reason:   sysmsg.Reason{
+				Type: sysmsg.Normal,
+			},
+		}
+		a.notifyLinkedActors(normal, false)
+		a.notifyMonitors(normal)
 	}
 }
 
@@ -230,7 +231,11 @@ func (a *Actor) notifyLinkedActors(message sysmsg.Exit, shutdown bool) {
 	}
 }
 
-func fromInterface(p interface{}) (_pid pid.PID) {
-	_pid, _ = p.(pid.PID)
-	return
+func fromInterface(p interface{}) pid.PID {
+	_pid, ok := p.(pid.PID)
+	if !ok {
+		log.Fatalf("invalid type: wrong object has been used as the actor's fromInterface argument" +
+			"\nexpected type: pid.PID\tgot: %v", reflect.TypeOf(p))
+	}
+	return _pid
 }

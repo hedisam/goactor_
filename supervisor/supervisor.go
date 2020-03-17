@@ -49,7 +49,7 @@ func supervisor(supervisor *actor.Actor) {
 			err := state.init()
 			actor.Send(msg.sender, err)
 		case sysmsg.Exit:
-			switch msg.Reason {
+			switch msg.Reason.Type {
 			case sysmsg.Panic, sysmsg.SupMaxRestart:
 				name, dead, found := state.registry.id(msg.Who.(pid.PID))
 				if dead || !found {
@@ -78,7 +78,10 @@ func supervisor(supervisor *actor.Actor) {
 			}
 		case sysmsg.Shutdown:
 			// parent supervisor wants us to shutdown
-			state.shutdownSupervisor(sysmsg.Kill)
+			state.shutdownSupervisor(sysmsg.Reason{
+				Type:    sysmsg.Kill,
+				Details: "shutdown cmd received by parent supervisor",
+			})
 		case spec.Call:
 			return state.handleCall(msg)
 		default:

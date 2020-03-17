@@ -26,7 +26,7 @@ func newState(specs spec.SpecsMap, options *Options, supervisor *actor.Actor) *s
 }
 
 func (state *state) shutdown(name string, _pid pid.PID) {
-	// todo: do not call deadAndUnlink if we're supposed to receive shutdown feedback
+	// note: do not call deadAndUnlink if we're supposed to receive shutdown feedback
 	state.deadAndUnlink(_pid)
 
 	actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
@@ -56,7 +56,10 @@ func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
 func (state *state) spawn(name string) error {
 	if state.registry.reachedMaxRestarts(name) {
 		log.Println("[!] supervisor reached max restarts")
-		state.shutdownSupervisor(sysmsg.SupMaxRestart)
+		state.shutdownSupervisor(sysmsg.Reason{
+			Type:    sysmsg.SupMaxRestart,
+			Details: "one of supervisor's children reached its max allowed restarts ",
+		})
 	}
 
 	var ppid *pid.ProtectedPID
@@ -133,7 +136,7 @@ func (state *state) handleCall(call spec.Call) bool {
 	case spec.CountChildren:
 		request.Specs = len(state.specs)
 		request.Active = len(state.registry.aliveActors)
-		for id, _ := range state.specs {
+		for id := range state.specs {
 			if state.specs.Type(id) == spec.TypeSupervisor {
 				request.Supervisors++
 			} else {
@@ -188,7 +191,7 @@ func (state *state) handleCall(call spec.Call) bool {
 		}
 		// check if we've already got a child spec with the same id
 		var id string
-		for id, _ = range specMap {}
+		for id = range specMap {}
 		if _, exists := state.specs[id]; exists {
 			actor.Send(call.Sender, fmt.Errorf("a child spec already present with the same id"))
 			return true
@@ -235,7 +238,7 @@ func (state *state) handleCall(call spec.Call) bool {
 			return pid.NewProtectedPID(_pid)
 		}
 		info := make([]spec.ChildInfo, 0, len(state.specs))
-		for id, _ := range state.specs {
+		for id := range state.specs {
 			info = append(info, spec.ChildInfo{
 				Id:   id,
 				PID:  getPID(id),

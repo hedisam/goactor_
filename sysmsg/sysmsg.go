@@ -4,14 +4,17 @@ type SystemMessage interface {
 	systemMessage()
 }
 
-type Reason string
+type Reason struct {
+	Type string
+	Details interface{}
+}
 
 const (
 	// Kill reason in case of a Shutdown message
-	Kill   Reason = "kill"
-	Panic  Reason = "panic"
-	Normal Reason = "normal"
-	SupMaxRestart Reason = "max_restarts_reached"
+	Kill          = "kill"
+	Panic         = "panic"
+	Normal        = "normal"
+	SupMaxRestart = "sup_reached_max_restarts"
 )
 
 type Relation string

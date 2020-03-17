@@ -16,7 +16,7 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 			if m.Utils().TrapExit() {
 				return true, msg
 			}
-			switch msg.Reason {
+			switch msg.Reason.Type {
 			case sysmsg.Kill, sysmsg.Panic:
 				panic(sysmsg.Exit{
 					Who:      m.Utils().Self(),
@@ -35,7 +35,10 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 		panic(sysmsg.Exit{
 			Who:      m.Utils().Self(),
 			Parent:   msg.Parent,
-			Reason:   sysmsg.Kill,
+			Reason:   sysmsg.Reason{
+				Type:    sysmsg.Kill,
+				Details: "shutdown cmd received from supervisor",
+			},
 			Relation: sysmsg.Linked,
 		})
 	case sysmsg.Monitor:
@@ -81,7 +84,10 @@ func checkContext(m Mailbox) {
 			panic(sysmsg.Exit{
 				Who:      m.Utils().Self,
 				Parent:   nil,
-				Reason:   sysmsg.Kill,
+				Reason:   sysmsg.Reason{
+					Type:    sysmsg.Kill,
+					Details: "shutdown cmd received from supervisor",
+				},
 				Relation: sysmsg.Linked,
 			})
 		}
