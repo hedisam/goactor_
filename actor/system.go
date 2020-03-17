@@ -23,7 +23,7 @@ func Spawn(fn Func, args ...interface{}) *pid.ProtectedPID {
 	return actor.Self()
 }
 
-func createActor(args ...interface{}) Actor {
+func createActor(args ...interface{}) *Actor {
 	utils := &mailbox.ActorUtils{}
 	_pid := pid.NewPID(utils)
 	ctx := context.NewContext(_pid, args)
@@ -31,11 +31,11 @@ func createActor(args ...interface{}) Actor {
 	return actor
 }
 
-func spawn(fn Func, actor Actor) {
-	go func(fn Func, actor Actor) {
+func spawn(fn Func, actor *Actor) {
+	go func() {
 		defer actor.handleTermination()
 		fn(actor)
-	}(fn, actor)
+	}()
 }
 
 func sendSystemMessage(ppid *pid.ProtectedPID, message sysmsg.SystemMessage) {

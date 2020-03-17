@@ -15,16 +15,15 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 		case sysmsg.Linked:
 			if m.Utils().TrapExit() {
 				return true, msg
-			} else {
-				switch msg.Reason {
-				case sysmsg.Kill, sysmsg.Panic:
-					panic(sysmsg.Exit{
-						Who:      m.Utils().Self(),
-						Parent:   msg.Who,
-						Reason:   msg.Reason,
-						Relation: sysmsg.Linked,
-					})
-				}
+			}
+			switch msg.Reason {
+			case sysmsg.Kill, sysmsg.Panic:
+				panic(sysmsg.Exit{
+					Who:      m.Utils().Self(),
+					Parent:   msg.Who,
+					Reason:   msg.Reason,
+					Relation: sysmsg.Linked,
+				})
 			}
 		}
 	// if some actor/supervisor sends a ShutdownFn command they also should close the context's done channel
@@ -32,14 +31,13 @@ func handleSystemMessage(m Mailbox, message interface{}) (bool, sysmsg.SystemMes
 		// todo: shutdown based on the shutdown value
 		if m.Utils().TrapExit() {
 			return true, msg
-		} else {
-			panic(sysmsg.Exit{
-				Who:      m.Utils().Self(),
-				Parent:   msg.Parent,
-				Reason:   sysmsg.Kill,
-				Relation: sysmsg.Linked,
-			})
 		}
+		panic(sysmsg.Exit{
+			Who:      m.Utils().Self(),
+			Parent:   msg.Parent,
+			Reason:   sysmsg.Kill,
+			Relation: sysmsg.Linked,
+		})
 	case sysmsg.Monitor:
 		if msg.Revert {
 			m.Utils().DemonitorBy(msg.Parent)

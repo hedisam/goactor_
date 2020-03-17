@@ -1,11 +1,10 @@
 package spec
 
 import (
-	"github.com/hedisam/goactor/supervisor/ref"
 	"github.com/rs/xid"
 )
 
-type StartLink func(specs ...Spec) (*ref.Ref, error)
+type StartLink func(specs ...Spec) (*SupRef, error)
 
 type SupervisorSpec struct {
 	Id        string

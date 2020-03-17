@@ -18,8 +18,8 @@ func main() {
 	time.Sleep(1 * time.Second)
 }
 
-func echo(actor actor.Actor) {
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+func echo(actor *actor.Actor) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		if message == "shutdown" {
 			fmt.Println("[-] echo: shutting down")
 			return false

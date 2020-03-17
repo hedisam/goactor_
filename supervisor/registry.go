@@ -34,14 +34,14 @@ func (r *registry) id(_pid pid.PID) (id string, dead, found bool) {
 	return
 }
 
-// pid returns the pid.PID associated with the id if the actor is alive
-func (r *registry) pid(id string) pid.PID {
+// alivePID returns the pid.PID associated with the id if the actor is alive
+func (r *registry) alivePID(id string) (pid.PID, bool) {
 	for _pid, _id := range r.aliveActors {
 		if _id == id {
-			return _pid
+			return _pid, true
 		}
 	}
-	return nil
+	return nil, false
 }
 
 // put saves actor's pid and increment restarts count in case of restarts

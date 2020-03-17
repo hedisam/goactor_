@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/internal/pid"
-	"github.com/hedisam/goactor/supervisor/ref"
 	"github.com/hedisam/goactor/supervisor/spec"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
@@ -14,10 +13,10 @@ type state struct {
 	specs      spec.SpecsMap
 	options    *Options
 	registry   *registry
-	supervisor actor.Actor
+	supervisor *actor.Actor
 }
 
-func newState(specs spec.SpecsMap, options *Options, supervisor actor.Actor) *state {
+func newState(specs spec.SpecsMap, options *Options, supervisor *actor.Actor) *state {
 	return &state{
 		specs: specs,
 		options: options,
@@ -37,8 +36,8 @@ func (state *state) shutdown(name string, _pid pid.PID) {
 	_pid.ShutdownFn()()
 }
 
-func (state *state) maxRestartsReached() {
-	// shutdown all spec and also the supervisor.
+func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
+	// shutdown all specs then panic.
 	// note: calling panic in supervisor should kill its children since they are linked but we're explicitly
 	// shutting down each one to close child's context's done channel
 	reg := copyMap(state.registry.aliveActors)
@@ -46,18 +45,18 @@ func (state *state) maxRestartsReached() {
 		state.shutdown(id, _pid)
 	}
 
-	log.Println("[!] supervisor reached max restarts")
 	panic(sysmsg.Exit{
 		Who:      pid.ExtractPID(state.supervisor.Self()),
 		Parent:   nil,
-		Reason:   sysmsg.SupMaxRestart,
+		Reason:   reason,
 		Relation: sysmsg.Linked,
 	})
 }
 
 func (state *state) spawn(name string) (err error) {
 	if state.registry.reachedMaxRestarts(name) {
-		state.maxRestartsReached()
+		log.Println("[!] supervisor reached max restarts")
+		state.shutdownSupervisor(sysmsg.SupMaxRestart)
 		return
 	}
 
@@ -68,9 +67,9 @@ func (state *state) spawn(name string) (err error) {
 		ppid = state.supervisor.SpawnLink(start.ActorFunc, start.Args...)
 	case spec.TypeSupervisor:
 		startLink := state.specs.SupervisorStartLink(name)
-		ref, err := startLink(state.specs.SupervisorChildren(name)...)
+		supRef, err := startLink(state.specs.SupervisorChildren(name)...)
 		if err != nil {return err}
-		ppid = ref.PPID
+		ppid = supRef.PPID
 		state.supervisor.Link(ppid)
 	default:
 		panic("invalid spec type when spawning child")
@@ -105,7 +104,7 @@ func (state *state) handleOneForAll(name string) {
 		} else {
 			state.shutdown(id, _pid)
 		}
-		state.spawn(id)
+		_ = state.spawn(id)
 	}
 }
 
@@ -113,7 +112,7 @@ func (state *state) handleOneForOne(name string, _pid pid.PID) {
 	// we need to unlink the terminated actor and declare it dead
 	state.deadAndUnlink(_pid)
 	// re-spawn
-	state.spawn(name)
+	_ = state.spawn(name)
 }
 
 func (state *state) handleRestForOne(name string) {
@@ -125,9 +124,9 @@ func (state *state) deadAndUnlink(_pid pid.PID) {
 	state.supervisor.Unlink(pid.NewProtectedPID(_pid))
 }
 
-func (state *state) handleCall(call ref.Call) bool {
+func (state *state) handleCall(call spec.Call) bool {
 	switch request := call.Request.(type) {
-	case ref.CountChildren:
+	case spec.CountChildren:
 		request.Specs = len(state.specs)
 		request.Active = len(state.registry.aliveActors)
 		for id, _ := range state.specs {
@@ -138,46 +137,45 @@ func (state *state) handleCall(call ref.Call) bool {
 			}
 		}
 		actor.Send(call.Sender, request)
-	case ref.DeleteChild:
+	case spec.DeleteChild:
 		// check if a child exists with the specified id
 		if _, exists := state.specs[request.Id]; !exists {
 			actor.Send(call.Sender, fmt.Errorf("child does not exists"))
 			return true
 		}
 		// check if the child is running
-		for _, id := range state.registry.aliveActors {
-			if id == request.Id {
-				// we can not delete a child that is running
-				actor.Send(call.Sender, fmt.Errorf("running child cannot be deleted"))
-				return true
-			}
+		_, alive := state.registry.alivePID(request.Id)
+		if alive {
+			// we can not delete a child that is running
+			actor.Send(call.Sender, fmt.Errorf("running child cannot be deleted"))
+			return true
 		}
 		// delete the child
 		// note: if this supervisor gets restarted by a parent supervisor then the original child specs
 		// will be used. (unless we update the parent with the new child specs)
 		delete(state.specs, request.Id)
-		actor.Send(call.Sender, ref.OK{})
-	case ref.RestartChild:
+		actor.Send(call.Sender, spec.OK{})
+	case spec.RestartChild:
 		// check if a child exists with the specified id
 		if _, exists := state.specs[request.Id]; !exists {
 			actor.Send(call.Sender, fmt.Errorf("child does not exists"))
 			return true
 		}
 		// check if the child is running
-		for _, id := range state.registry.aliveActors {
-			if id == request.Id {
-				// we can not delete a child that is running
-				actor.Send(call.Sender, fmt.Errorf("running child cannot be deleted"))
-				return true
-			}
+		_, alive := state.registry.alivePID(request.Id)
+		if alive {
+			// we can not delete a child that is running
+			actor.Send(call.Sender, fmt.Errorf("running child cannot be deleted"))
+			return true
 		}
+
 		err := state.spawn(request.Id)
 		if err != nil {
 			actor.Send(call.Sender, err)
 			return true
 		}
-		actor.Send(call.Sender, ref.OK{})
-	case ref.StartChild:
+		actor.Send(call.Sender, spec.OK{})
+	case spec.StartChild:
 		// check if the child spec is valid
 		specMap, err := spec.ToMap(request.Spec)
 		if err != nil {
@@ -199,37 +197,35 @@ func (state *state) handleCall(call ref.Call) bool {
 			actor.Send(call.Sender, err)
 			return true
 		}
-		actor.Send(call.Sender, ref.OK{})
-	case ref.Stop:
-		// todo: pass the reason, make sure it's is valid
+		actor.Send(call.Sender, spec.OK{})
+	case spec.Stop:
+		// todo: pass the reason, make sure it's valid
 		// shutdown children
 		reg := copyMap(state.registry.aliveActors)
 		for _pid, id := range reg {
 			state.shutdown(id, _pid)
 		}
-		actor.Send(call.Sender, ref.OK{})
+		actor.Send(call.Sender, spec.OK{})
 		return false
-	case ref.TerminateChild:
+	case spec.TerminateChild:
 		// check if a child exists with the specified id
 		if _, exists := state.specs[request.Id]; !exists {
 			actor.Send(call.Sender, fmt.Errorf("child does not exists"))
 			return true
 		}
 		// check if the child is running
-		for _pid, id := range state.registry.aliveActors {
-			if id == request.Id {
-				// found the alive child. shut it down
-				state.shutdown(id, _pid)
-				actor.Send(call.Sender, request)
-				return true
-			}
+		_pid, ok := state.registry.alivePID(request.Id)
+		if !ok {
+			// the child is not alive
+			actor.Send(call.Sender, fmt.Errorf("child already has been terminated"))
+			return true
 		}
-		// the child is not alive
-		actor.Send(call.Sender, fmt.Errorf("child already has been terminated"))
-	case ref.WithChildren:
+		state.shutdown(request.Id, _pid)
+		actor.Send(call.Sender, spec.OK{})
+	case spec.WithChildren:
 		getPID := func(id string) *pid.ProtectedPID {
-			_pid := state.registry.pid(id)
-			if _pid == nil {
+			_pid, ok := state.registry.alivePID(id)
+			if !ok {
 				return nil
 			}
 			return pid.NewProtectedPID(_pid)

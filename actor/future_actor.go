@@ -36,7 +36,7 @@ func (f *futureActor) Recv() (response interface{}, err error) {
 	f.pid.Mailbox().Receive(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case sysmsg.Exit:
-			err = fmt.Errorf("target actor terminated before sending a response")
+			err = fmt.Errorf("target Actor terminated before sending a response")
 		case mailbox.ErrDisposed:
 			err = fmt.Errorf("%v", msg)
 		default:
@@ -52,7 +52,7 @@ func (f *futureActor) RecvWithTimeout(duration time.Duration) (response interfac
 	f.pid.Mailbox().ReceiveWithTimeout(duration, func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case sysmsg.Exit:
-			err = fmt.Errorf("target actor terminated before sending a response")
+			err = fmt.Errorf("target Actor terminated before sending a response")
 		case mailbox.ErrDisposed:
 			err = fmt.Errorf("%v", msg)
 		case sysmsg.Timeout:

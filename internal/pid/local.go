@@ -9,7 +9,7 @@ type localPID struct {
 	supervisorSetter func(PID)
 }
 
-func NewPID(utils *mailbox.ActorUtils) PID {
+func NewPID(utils *mailbox.ActorUtils) *localPID {
 	return &localPID{
 		m: mailbox.DefaultRingBufferQueueMailbox(utils),
 	}

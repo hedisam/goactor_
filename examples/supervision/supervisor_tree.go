@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/supervisor"
-	"github.com/hedisam/goactor/supervisor/ref"
 	"github.com/hedisam/goactor/supervisor/spec"
 	"log"
 	"time"
@@ -29,7 +28,7 @@ func (sup mySupervisor) ChildSpec() spec.Spec {
 	return spec.NewSupervisorSpec(sup.StartLink, worker{})
 }
 
-func (sup mySupervisor) StartLink(specs ...spec.Spec) (*ref.Ref, error) {
+func (sup mySupervisor) StartLink(specs ...spec.Spec) (*spec.SupRef, error) {
 	fmt.Println("[+] start_link invoked")
 	return supervisor.Start(
 		supervisor.NewOptions(supervisor.OneForOneStrategy, 1, 2),
@@ -40,9 +39,9 @@ func (w worker) ChildSpec() spec.Spec {
 	return spec.NewWorkerSpec("worker", w.work)
 }
 
-func (w worker) work(actor actor.Actor) {
+func (w worker) work(actor *actor.Actor) {
 	fmt.Println("[!] work actor started")
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		switch message {
 		case "panic":
 			fmt.Println("[-] work actor received panic command")

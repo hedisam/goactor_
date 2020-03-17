@@ -22,11 +22,11 @@ func main() {
 	wait()
 }
 
-func counter(actor actor.Actor) {
-	var number = actor.Context().Args()[0]
+func counter(actor *actor.Actor) {
+	var number = actor.Args()[0]
 	count := 0
 	now := time.Now()
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		count++
 		if count == number {
 			elapsed := time.Since(now)
@@ -41,6 +41,7 @@ func wait() {
 	signalChan := make(chan os.Signal, 1)
 	done := make(chan struct{})
 	signal.Notify(signalChan, os.Interrupt)
+	signal.Notify(signalChan, os.Kill)
 	go func() {
 		<-signalChan
 		fmt.Println("[!] CTRL+C")

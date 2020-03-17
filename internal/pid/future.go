@@ -8,7 +8,7 @@ type futurePID struct {
 	actorType func(int32)
 }
 
-func NewFuturePID() PID {
+func NewFuturePID() *futurePID {
 	return &futurePID{
 		mailbox: mailbox.NewFutureMailbox(),
 	}

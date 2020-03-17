@@ -21,7 +21,7 @@ func main() {
 	actor.Send(echoPID, Message{Sender: parent.Self(), Text: "Hey echo, send back this message"})
 	actor.Send(echoPID, Message{Sender: parent.Self(), Text: "Another message from Hidayat"})
 
-	parent.Context().RecvWithTimeout(1 * time.Second, func(message interface{}) (loop bool) {
+	parent.ReceiveWithTimeout(1 * time.Second, func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case sysmsg.Timeout:
 			future := actor.NewFutureActor()
@@ -36,8 +36,8 @@ func main() {
 	})
 }
 
-func echo(a actor.Actor) {
-	a.Context().Recv(func(message interface{}) (loop bool) {
+func echo(a *actor.Actor) {
+	a.Receive(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
 		case Message:
 			actor.Send(msg.Sender, msg)

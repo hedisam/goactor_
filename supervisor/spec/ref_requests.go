@@ -1,9 +1,8 @@
-package ref
+package spec
 
 import (
 	"fmt"
 	"github.com/hedisam/goactor/internal/pid"
-	"github.com/hedisam/goactor/supervisor/spec"
 )
 
 type Error error
@@ -18,9 +17,7 @@ type Call struct {
 }
 
 // OK represents a successful result
-type OK struct {
-
-}
+type OK struct {}
 
 type CountChildren struct {
 	// the total count of children, dead or alive
@@ -44,7 +41,7 @@ type RestartChild struct {
 }
 
 type StartChild struct {
-	Spec spec.Spec
+	Spec Spec
 }
 
 type Stop struct {
@@ -56,5 +53,5 @@ type TerminateChild struct {
 }
 
 type WithChildren struct {
-	ChildrenInfo []spec.ChildInfo
+	ChildrenInfo []ChildInfo
 }

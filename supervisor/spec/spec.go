@@ -1,6 +1,8 @@
 package spec
 
-import "github.com/hedisam/goactor/internal/pid"
+import (
+	"github.com/hedisam/goactor/internal/pid"
+)
 
 type Spec interface {
 	ChildSpec() Spec

@@ -31,9 +31,9 @@ func maxRestartsMain() {
 	}
 }
 
-func panik(actor actor.Actor) {
+func panik(actor *actor.Actor) {
 	fmt.Println("[+] panik started")
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		fmt.Println("[!] panik received:", message)
 		panic("just panic")
 	})
@@ -52,11 +52,11 @@ func longRunningMain() {
 	actor.SendNamed("#2", "panic")
 }
 
-func longRunning(actor actor.Actor) {
-	name := actor.Context().Args()[0]
+func longRunning(actor *actor.Actor) {
+	name := actor.Args()[0]
 	fmt.Printf("[+] %v started\n", name)
 
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		switch message {
 		case "panic":
 			panic("PANIC COMMAND")
@@ -64,7 +64,7 @@ func longRunning(actor actor.Actor) {
 			return false
 		case "sleep":
 			select {
-			case <-actor.Context().Done():
+			case <-actor.Done():
 				fmt.Printf("[!] %v is dead.\n", name)
 				return false
 			default:
@@ -72,7 +72,7 @@ func longRunning(actor actor.Actor) {
 				time.Sleep(1 * time.Second)
 			}
 			select {
-			case <-actor.Context().Done():
+			case <-actor.Done():
 				fmt.Printf("[!] %v is dead.\n", name)
 				return false
 			default:
@@ -103,11 +103,11 @@ func simpleChildMain() {
 	actor.SendNamed("#1", "shutdown")
 }
 
-func simpleChild(actor actor.Actor) {
-	name := actor.Context().Args()[0]
+func simpleChild(actor *actor.Actor) {
+	name := actor.Args()[0]
 	fmt.Printf("[+] %v started\n", name)
 
-	actor.Context().Recv(func(message interface{}) (loop bool) {
+	actor.Receive(func(message interface{}) (loop bool) {
 		switch message {
 		case "shutdown":
 			fmt.Printf("[-] %v shutting down\n", name)

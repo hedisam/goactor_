@@ -20,10 +20,10 @@ func WhereIs(name string) (ppid *pid.ProtectedPID) {
 	return
 }
 
-func registry(act Actor) {
+func registry(act *Actor) {
 	repo := registryMap{}
 
-	act.Context().Recv(func(message interface{}) (loop bool) {
+	act.Receive(func(message interface{}) (loop bool) {
 		switch cmd := message.(type) {
 		case cmdRegister:
 			repo[cmd.name] = cmd.pid
