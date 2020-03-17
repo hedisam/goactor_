@@ -21,9 +21,9 @@ func Start(options Options, specs ...spec.Spec) (*spec.SupRef, error) {
 
 	// spawn supervisor actor passing spec data and options as arguments
 	suPID := actor.Spawn(supervisor, specsMap, &options)
-	pid.ExtractPID(suPID).ActorTypeFn()(actor.SupervisorActor)
-	// todo: register supervisors on a different process registry
-	actor.Register(options.Name, suPID)
+	// declare the new spawned actor as a supervisor actor
+	setActorType := pid.ExtractPID(suPID).ActorTypeFn()
+	setActorType(actor.SupervisorActor)
 
 	// wait till all spec are spawned
 	future := actor.NewFutureActor()

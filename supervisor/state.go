@@ -53,11 +53,10 @@ func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
 	})
 }
 
-func (state *state) spawn(name string) (err error) {
+func (state *state) spawn(name string) error {
 	if state.registry.reachedMaxRestarts(name) {
 		log.Println("[!] supervisor reached max restarts")
 		state.shutdownSupervisor(sysmsg.SupMaxRestart)
-		return
 	}
 
 	var ppid *pid.ProtectedPID
@@ -72,14 +71,19 @@ func (state *state) spawn(name string) (err error) {
 		ppid = supRef.PPID
 		state.supervisor.Link(ppid)
 	default:
-		panic("invalid spec type when spawning child")
+		log.Fatal("invalid spec type when spawning child")
 	}
-	pid.ExtractPID(ppid).SupervisorFn()(pid.ExtractPID(state.supervisor.Self()))
+	_pid := pid.ExtractPID(ppid)
+
+	// tell the new spawned actor (worker/supervisor) that it has a supervisor
+	setSupervisor := _pid.SupervisorFn()
+	setSupervisor(pid.ExtractPID(state.supervisor.Self()))
+
 	// register locally
-	state.registry.put(pid.ExtractPID(ppid), name)
+	state.registry.put(_pid, name)
 	// register globally
 	actor.Register(name, ppid)
-	return
+	return nil
 }
 
 func (state *state) init() (err error) {
