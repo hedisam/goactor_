@@ -23,6 +23,20 @@ func Spawn(fn Func, args ...interface{}) *pid.ProtectedPID {
 	return actor.Self()
 }
 
+func spawnLink(fn Func, to pid.PID, args ...interface{}) *pid.ProtectedPID {
+	actor := createActor(args...)
+	actor.link(to)
+	spawn(fn, actor)
+	return actor.Self()
+}
+
+func spawnMonitor(fn Func, by pid.PID, args ...interface{}) *pid.ProtectedPID {
+	actor := createActor(args...)
+	actor.monitoredBy(by)
+	spawn(fn, actor)
+	return actor.Self()
+}
+
 func createActor(args ...interface{}) *Actor {
 	utils := &mailbox.ActorUtils{}
 	_pid := pid.NewPID(utils)

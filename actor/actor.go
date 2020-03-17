@@ -69,6 +69,7 @@ func (a *Actor) actorType() int32 {
 	return atomic.LoadInt32(&a.aType)
 }
 
+// setUtils methods to be called from mailbox
 func (a *Actor) setUtils(utils *mailbox.ActorUtils) {
 	utils.Link = func(pid interface{}) {
 		a.link(fromInterface(pid))
@@ -90,9 +91,6 @@ func (a *Actor) setUtils(utils *mailbox.ActorUtils) {
 	}
 	utils.TrapExit = a.trapExited
 }
-
-// util methods. these methods must only be called from
-// mailbox receive when handling system messages
 
 func (a *Actor) link(pid pid.PID) {
 	a.linkedActors[pid] = pid
@@ -131,30 +129,28 @@ func (a *Actor) Link(ppid *pid.ProtectedPID) {
 	// send a link request to the target Actor
 	req := sysmsg.Link{To: pid.ExtractPID(a.self)}
 	sendSystemMessage(ppid, req)
-	// send a link request to ourselves
-	req1 := sysmsg.Link{To: pid.ExtractPID(ppid)}
-	sendSystemMessage(a.Self(), req1)
+
+	// add the target pid to our linked actors list
+	a.link(pid.ExtractPID(ppid))
 }
 
 func (a *Actor) Unlink(ppid *pid.ProtectedPID) {
 	// send an unlink request to the target Actor
 	req := sysmsg.Link{To: pid.ExtractPID(a.self), Revert: true}
 	sendSystemMessage(ppid, req)
-	// send an unlink request to ourselves
-	req1 := sysmsg.Link{To: pid.ExtractPID(ppid), Revert: true}
-	sendSystemMessage(a.Self(), req1)
+
+	// delete from linked actors list
+	a.unlink(pid.ExtractPID(ppid))
 }
 
 func (a *Actor) SpawnLink(fn Func, args ...interface{}) *pid.ProtectedPID {
-	ppid := Spawn(fn, args...)
-	a.Link(ppid)
+	ppid := spawnLink(fn, pid.ExtractPID(a.Self()), args...)
+	a.link(pid.ExtractPID(ppid))
 	return ppid
 }
 
 func (a *Actor) SpawnMonitor(fn Func, args ...interface{}) *pid.ProtectedPID {
-	ppid := Spawn(fn, args...)
-	a.Monitor(ppid)
-	return ppid
+	return spawnMonitor(fn, pid.ExtractPID(a.Self()), args...)
 }
 
 func (a *Actor) TrapExit(trapExit bool) {
