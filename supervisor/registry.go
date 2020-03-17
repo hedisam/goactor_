@@ -24,14 +24,24 @@ func newRegistry(ops *Options) *registry {
 	}
 }
 
-// get returns the id associated with a pid. dead is true if the actor has been shutdown by supervisor.
-func (r *registry) get(_pid pid.PID) (id string, dead, found bool) {
+// id returns the id associated with a pid. dead is true if the actor has been shutdown by supervisor.
+func (r *registry) id(_pid pid.PID) (id string, dead, found bool) {
 	id, found = r.aliveActors[_pid]
 	if !found {
 		id, found = r.deadActors[_pid]
 		dead = true
 	}
 	return
+}
+
+// pid returns the pid.PID associated with the id if the actor is alive
+func (r *registry) pid(id string) pid.PID {
+	for _pid, _id := range r.aliveActors {
+		if _id == id {
+			return _pid
+		}
+	}
+	return nil
 }
 
 // put saves actor's pid and increment restarts count in case of restarts
@@ -85,7 +95,7 @@ func (r *registry) reachedMaxRestarts(id string) (reached bool) {
 		return true
 	}
 
-	// get rid of expired timestamps
+	// id rid of expired timestamps
 	r.timeTracer[id] = restartsNotEx
 	return
 }

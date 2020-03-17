@@ -220,7 +220,7 @@ func (a *actor) notifyLinkedActors(message sysmsg.Exit, shutdown bool) {
 	message.Relation = sysmsg.Linked
 	for _, linked := range a.linkedActors {
 		sendSystemMessage(pid.NewProtectedPID(linked), message)
-		// we can't shutdown a parent supervisor
+		// we can't shutdown our parent supervisor
 		if shutdown && a.supervisor() != linked {
 			linked.ShutdownFn()()
 		}

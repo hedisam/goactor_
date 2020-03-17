@@ -18,12 +18,17 @@ func SendNamed(name string, message interface{}) {
 }
 
 func Spawn(fn Func, args ...interface{}) *pid.ProtectedPID {
+	actor := createActor(args...)
+	spawn(fn, actor)
+	return actor.Self()
+}
+
+func createActor(args ...interface{}) Actor {
 	utils := &mailbox.ActorUtils{}
 	_pid := pid.NewPID(utils)
 	ctx := context.NewContext(_pid, args)
 	actor := newActor(ctx, _pid, utils)
-	spawn(fn, actor)
-	return actor.Self()
+	return actor
 }
 
 func spawn(fn Func, actor Actor) {

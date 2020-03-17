@@ -6,17 +6,6 @@ import (
 
 type SpecsMap map[string]Spec
 
-func (sm SpecsMap) Id(name string) string {
-	switch spec := sm[name].(type) {
-	case WorkerSpec:
-		return spec.Id
-	case SupervisorSpec:
-		return spec.Id
-	default:
-		panic("invalid childspec type in SpecMap Id")
-	}
-}
-
 func (sm SpecsMap) Restart(name string) int32 {
 	switch spec := sm[name].(type) {
 	case WorkerSpec:
@@ -77,7 +66,7 @@ func (sm SpecsMap) Type(name string) ChildType {
 	}
 }
 
-func ToMap(specs []Spec) (specsMap SpecsMap, err error) {
+func ToMap(specs ...Spec) (specsMap SpecsMap, err error) {
 	if len(specs) == 0 {
 		err = fmt.Errorf("empty childspec list")
 		return

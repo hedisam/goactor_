@@ -1,9 +1,17 @@
 package spec
 
+import "github.com/hedisam/goactor/internal/pid"
+
 type Spec interface {
 	ChildSpec() Spec
 }
 type ChildType int32
+
+type ChildInfo struct {
+	Id string
+	PID *pid.ProtectedPID
+	Type ChildType
+}
 
 const (
 	TypeWorker ChildType = iota
