@@ -9,7 +9,7 @@ import (
 type Error error
 
 func errInvalidResponse(resp interface{}) error {
-	return fmt.Errorf("supervisor has sent invalid response: %v", resp)
+	return fmt.Errorf("invalid response sent by supervisor: %v", resp)
 }
 
 type Call struct {

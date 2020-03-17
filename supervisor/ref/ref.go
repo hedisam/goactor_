@@ -10,125 +10,70 @@ type Ref struct {
 	PPID *pid.ProtectedPID
 }
 
-func (r *Ref) CountChildren() (CountChildren, error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: CountChildren{},
-	})
-	result, err := future.Recv()
-	if err != nil {return CountChildren{}, err}
-	switch result := result.(type) {
-	case CountChildren:
-		return result, nil
-	case Error:
-		return CountChildren{}, result
-	default:
-		return CountChildren{}, errInvalidResponse(result)
+func (r *Ref) CountChildren() (count CountChildren, err error) {
+	result, err := r.call(CountChildren{})
+	if err != nil {
+		return
 	}
+	count, ok := result.(CountChildren)
+	if !ok {
+		return count, errInvalidResponse(result)
+	}
+	return
 }
 
 func (r *Ref) DeleteChild(id string) (err error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: DeleteChild{id},
-	})
-	result, err := future.Recv()
-	if err != nil {return}
-	switch result := result.(type) {
-	case OK:
-		return nil
-	case Error:
-		return result
-	default:
-		return errInvalidResponse(result)
-	}
+	_, err = r.call(DeleteChild{id})
+	return
 }
 
 func (r *Ref) RestartChild(id string) (err error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: RestartChild{id},
-	})
-	result, err := future.Recv()
-	if err != nil {return}
-	switch result := result.(type) {
-	case OK:
-		return nil
-	case Error:
-		return result
-	default:
-		return errInvalidResponse(result)
-	}
+	_, err = r.call(RestartChild{id})
+	return
 }
 
 func (r *Ref) StartChild(spec spec.Spec) (err error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: StartChild{spec},
-	})
-	result, err := future.Recv()
-	if err != nil {return}
-	switch result := result.(type) {
-	case OK:
-		return nil
-	case Error:
-		return result
-	default:
-		return errInvalidResponse(result)
-	}
+	_, err = r.call(StartChild{spec})
+	return
 }
 
 func (r *Ref) Stop(reason string) (err error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: Stop{Reason: reason},
-	})
-	result, err := future.Recv()
-	if err != nil {return}
-	switch result := result.(type) {
-	case OK:
-		return nil
-	case Error:
-		return result
-	default:
-		return errInvalidResponse(result)
-	}
+	_, err = r.call(Stop{reason})
+	return
 }
 
 func (r *Ref) TerminateChild(id string) (err error) {
-	future := actor.NewFutureActor()
-	future.Send(r.PPID, Call{
-		Sender:  future.Self(),
-		Request: TerminateChild{id},
-	})
-	result, err := future.Recv()
-	if err != nil {return}
-	switch result := result.(type) {
-	case OK:
-		return nil
-	case Error:
-		return result
-	default:
-		return errInvalidResponse(result)
-	}
+	_, err = r.call(TerminateChild{id})
+	return
 }
 
-func (r *Ref) WithChildren() (WithChildren, error) {
+func (r *Ref) WithChildren() (childrenInfo WithChildren, err error) {
+	result, err := r.call(WithChildren{})
+	if err != nil {
+		return
+	}
+	childrenInfo, ok := result.(WithChildren)
+	if !ok {
+		return childrenInfo, errInvalidResponse(result)
+	}
+	return
+}
+
+func (r *Ref) call(request interface{}) (interface{}, error) {
 	future := actor.NewFutureActor()
-	future.Send(r.PPID, WithChildren{})
+	future.Send(r.PPID, request)
 	result, err := future.Recv()
-	if err != nil {return WithChildren{}, err}
+	if err != nil {
+		return nil, err
+	}
+
 	switch result := result.(type) {
-	case WithChildren:
-		return result, nil
+	case OK:
+		return nil, nil
 	case Error:
-		return WithChildren{}, result
+		return nil, result
 	default:
-		return WithChildren{}, errInvalidResponse(result)
+		// call specific response
+		return result, nil
 	}
 }

@@ -1,7 +1,6 @@
 package supervisor
 
 import (
-	"fmt"
 	"github.com/hedisam/goactor/actor"
 	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/supervisor/ref"
@@ -106,125 +105,7 @@ func supervisor(supervisor actor.Actor) {
 				Relation: sysmsg.Linked,
 			})
 		case ref.Call:
-			switch request := msg.Request.(type) {
-			case ref.CountChildren:
-				request.Specs = len(state.specs)
-				request.Active = len(state.registry.aliveActors)
-				for id, _ := range state.specs {
-					if state.specs.Type(id) == spec.TypeSupervisor {
-						request.Supervisors++
-					} else {
-						request.Workers++
-					}
-				}
-				actor.Send(msg.Sender, request)
-			case ref.DeleteChild:
-				// check if a child exists with the specified id
-				if _, exists := state.specs[request.Id]; !exists {
-					actor.Send(msg.Sender, fmt.Errorf("child does not exists"))
-					return true
-				}
-				// check if the child is running
-				for _, id := range state.registry.aliveActors {
-					if id == request.Id {
-						// we can not delete a child that is running
-						actor.Send(msg.Sender, fmt.Errorf("running child cannot be deleted"))
-						return true
-					}
-				}
-				// delete the child
-				// note: if this supervisor gets restarted by a parent supervisor then the original child specs
-				// will be used. (unless we update the parent with the new child specs)
-				delete(state.specs, request.Id)
-				actor.Send(msg.Sender, ref.OK{})
-			case ref.RestartChild:
-				// check if a child exists with the specified id
-				if _, exists := state.specs[request.Id]; !exists {
-					actor.Send(msg.Sender, fmt.Errorf("child does not exists"))
-					return true
-				}
-				// check if the child is running
-				for _, id := range state.registry.aliveActors {
-					if id == request.Id {
-						// we can not delete a child that is running
-						actor.Send(msg.Sender, fmt.Errorf("running child cannot be deleted"))
-						return true
-					}
-				}
-				err := state.spawn(request.Id)
-				if err != nil {
-					actor.Send(msg.Sender, err)
-					return true
-				}
-				actor.Send(msg.Sender, ref.OK{})
-			case ref.StartChild:
-				// check if the child spec is valid
-				specMap, err := spec.ToMap(request.Spec)
-				if err != nil {
-					actor.Send(msg.Sender, err)
-					return true
-				}
-				// check if we've already got a child spec with the same id
-				var id string
-				for id, _ = range specMap {}
-				if _, exists := state.specs[id]; exists {
-					actor.Send(msg.Sender, fmt.Errorf("a child spec already present with the same id"))
-					return true
-				}
-				// add the child spec to the supervisor child spec map
-				state.specs[id] = specMap[id]
-				// start the child
-				err = state.spawn(id)
-				if err != nil {
-					actor.Send(msg.Sender, err)
-					return true
-				}
-				actor.Send(msg.Sender, ref.OK{})
-			case ref.Stop:
-				// todo: pass the reason, make sure it's is valid
-				// shutdown children
-				reg := copyMap(state.registry.aliveActors)
-				for _pid, id := range reg {
-					state.shutdown(id, _pid)
-				}
-				actor.Send(msg.Sender, ref.OK{})
-				return false
-			case ref.TerminateChild:
-				// check if a child exists with the specified id
-				if _, exists := state.specs[request.Id]; !exists {
-					actor.Send(msg.Sender, fmt.Errorf("child does not exists"))
-					return true
-				}
-				// check if the child is running
-				for _pid, id := range state.registry.aliveActors {
-					if id == request.Id {
-						// found the alive child. shut it down
-						state.shutdown(id, _pid)
-						actor.Send(msg.Sender, request)
-						return true
-					}
-				}
-				// the child is not alive
-				actor.Send(msg.Sender, fmt.Errorf("child already has been terminated"))
-			case ref.WithChildren:
-				getPID := func(id string) *pid.ProtectedPID {
-					_pid := state.registry.pid(id)
-					if _pid == nil {
-						return nil
-					}
-					return pid.NewProtectedPID(_pid)
-				}
-				info := make([]spec.ChildInfo, 0, len(state.specs))
-				for id, _ := range state.specs {
-					info = append(info, spec.ChildInfo{
-						Id:   id,
-						PID:  getPID(id),
-						Type: state.specs.Type(id),
-					})
-				}
-				request.ChildrenInfo = info
-				actor.Send(msg.Sender, request)
-			}
+			return state.handleCall(msg)
 		default:
 			log.Println("supervisor received unknown message:", msg)
 		}
