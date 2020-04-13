@@ -1,11 +1,11 @@
 package supervisor
 
 import (
-	"github.com/hedisam/goactor/internal/pid"
+	"github.com/hedisam/goactor/supervisor/spec"
 	"time"
 )
 
-type registryRepo map[pid.PID]string
+type registryRepo map[spec.CancelablePID]string
 
 type registry struct {
 	aliveActors registryRepo
@@ -25,28 +25,28 @@ func newRegistry(ops *Options) *registry {
 }
 
 // id returns the id associated with a pid. dead is true if the actor has been shutdown by supervisor.
-func (r *registry) id(_pid pid.PID) (id string, dead, found bool) {
-	id, found = r.aliveActors[_pid]
+func (r *registry) id(pid spec.CancelablePID) (id string, dead, found bool) {
+	id, found = r.aliveActors[pid]
 	if !found {
-		id, found = r.deadActors[_pid]
+		id, found = r.deadActors[pid]
 		dead = true
 	}
 	return
 }
 
 // alivePID returns the pid.PID associated with the id if the actor is alive
-func (r *registry) alivePID(id string) (pid.PID, bool) {
-	for _pid, _id := range r.aliveActors {
+func (r *registry) alivePID(id string) (spec.CancelablePID, bool) {
+	for pid, _id := range r.aliveActors {
 		if _id == id {
-			return _pid, true
+			return pid, true
 		}
 	}
 	return nil, false
 }
 
 // put saves actor's pid and increment restarts count in case of restarts
-func (r *registry) put(_pid pid.PID, id string) {
-	r.aliveActors[_pid] = id
+func (r *registry) put(pid spec.CancelablePID, id string) {
+	r.aliveActors[pid] = id
 	restarts, ok := r.timeTracer[id]
 	if !ok {
 		// it's the first time this actor been spawned. so it's not a restart. we only record restarts timestamp
@@ -58,16 +58,16 @@ func (r *registry) put(_pid pid.PID, id string) {
 }
 
 // dead declares an actor dead by its pid
-func (r *registry) dead(_pid pid.PID) {
-	id, found := r.aliveActors[_pid]
+func (r *registry) dead(pid spec.CancelablePID) {
+	id, found := r.aliveActors[pid]
 	if !found {
 		return
 	}
-	delete(r.aliveActors, _pid)
-	r.deadActors[_pid] = id
+	delete(r.aliveActors, pid)
+	r.deadActors[pid] = id
 }
 
-// reachedMaxRestarts returns true if we have restarts more that allowed in the same Period
+// reachedMaxRestarts returns true if we have restarts more than allowed in the same Period
 // notice: the restarts number occurred in the same Period is added by one since this method should be called just
 // before re-spawning an actor. so we're counting  the not-yet re-spawned one too.
 func (r *registry) reachedMaxRestarts(id string) (reached bool) {

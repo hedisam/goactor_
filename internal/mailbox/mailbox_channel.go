@@ -6,24 +6,23 @@ import (
 )
 
 type channelMailbox struct {
-	userMailbox chan interface{}
-	sysMailbox  chan interface{}
-	done        chan struct{}
-	utils       *ActorUtils
+	userMailbox   chan interface{}
+	sysMailbox    chan interface{}
+	done          chan struct{}
+	systemHandler systemMessageHandler
 }
 
-func DefaultChanMailbox(utils *ActorUtils) Mailbox {
+func DefaultChanMailbox() *channelMailbox {
 	m := channelMailbox{
 		userMailbox: make(chan interface{}, defaultUserMailboxCap),
 		sysMailbox:  make(chan interface{}, defaultSysMailboxCap),
 		done:        make(chan struct{}),
-		utils:       utils,
 	}
 	return &m
 }
 
-func (m *channelMailbox) Utils() *ActorUtils {
-	return m.utils
+func (m *channelMailbox) SetSystemMessageHandler(systemHandler systemMessageHandler) {
+		m.systemHandler = systemHandler
 }
 
 func (m *channelMailbox) SendUserMessage(message interface{}) {
@@ -43,7 +42,7 @@ func (m *channelMailbox) SendSystemMessage(message interface{}) {
 }
 
 func (m *channelMailbox) Receive(handler MessageHandler) {
-	defer checkContext(m)
+	defer m.systemHandler.CheckUnhandledShutdown()
 loop:
 	select {
 	case msg, ok := <-m.userMailbox:
@@ -55,7 +54,7 @@ loop:
 			goto loop
 		}
 	case sysMsg := <-m.sysMailbox:
-		pass, msg := handleSystemMessage(m, sysMsg)
+		pass, msg := m.systemHandler.HandleSystemMessage(sysMsg)
 		if pass {
 			keepOn := handler(msg)
 			if keepOn {
@@ -71,7 +70,7 @@ loop:
 }
 
 func (m *channelMailbox) ReceiveWithTimeout(timeout time.Duration, handler MessageHandler) {
-	defer checkContext(m)
+	defer m.systemHandler.CheckUnhandledShutdown()
 	timer := time.NewTimer(timeout)
 	defer stopTimer(timer)
 loop:
@@ -85,9 +84,17 @@ loop:
 			resetTimer(timer, timeout, false)
 			goto loop
 		}
-	case sysMsg := <-m.sysMailbox:
-		handleSystemMessage(m, sysMsg)
-		resetTimer(timer, timeout, false)
+	case _ = <-m.sysMailbox:
+		//pass, msg := m.systemHandler.HandleSystemMessage(sysMsg)
+		//if pass {
+		//	keepOn := handler(msg)
+		//	if keepOn {
+		//		goto loop
+		//	}
+		//} else {
+		//	goto loop
+		//}
+		//resetTimer(timer, timeout, false)
 		goto loop
 	case <-m.done:
 		return

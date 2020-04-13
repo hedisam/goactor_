@@ -2,13 +2,12 @@ package supervisor
 
 import (
 	"github.com/hedisam/goactor/actor"
-	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/supervisor/spec"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
 )
 
-type initMsg struct {sender *pid.ProtectedPID}
+type initMsg struct {sender spec.BasicPID}
 
 func Start(options Options, specs ...spec.Spec) (*spec.SupRef, error) {
 	specsMap, err := spec.ToMap(specs...)
@@ -21,18 +20,15 @@ func Start(options Options, specs ...spec.Spec) (*spec.SupRef, error) {
 
 	// spawn supervisor actor passing spec data and options as arguments
 	suPID := actor.Spawn(supervisor, specsMap, &options)
-	// declare the new spawned actor as a supervisor actor
-	setActorType := pid.ExtractPID(suPID).ActorTypeFn()
-	setActorType(actor.SupervisorActor)
 
 	// wait till all spec are spawned
 	future := actor.NewFutureActor()
 	actor.Send(suPID, initMsg{sender: future.Self()})
-	initErr, err := future.Recv()
+	initErr, err := future.Receive()
 	if err != nil {return nil, err}
 	if initErr != nil {return nil, initErr.(error)}
 
-	return &spec.SupRef{PPID: suPID}, nil
+	return &spec.SupRef{PID: suPID}, nil
 }
 
 func supervisor(supervisor *actor.Actor) {
@@ -51,7 +47,7 @@ func supervisor(supervisor *actor.Actor) {
 		case sysmsg.Exit:
 			switch msg.Reason.Type {
 			case sysmsg.Panic, sysmsg.SupMaxRestart:
-				name, dead, found := state.registry.id(msg.Who.(pid.PID))
+				name, dead, found := state.registry.id(msg.Who)
 				if dead || !found {
 					return true
 				}
@@ -59,13 +55,13 @@ func supervisor(supervisor *actor.Actor) {
 				case spec.RestartAlways, spec.RestartTransient:
 					applyRestartStrategy(state, name, msg)
 				case spec.RestartNever:
-					state.deadAndUnlink(msg.Who.(pid.PID))
+					state.deadAndUnlink(msg.Who)
 				}
 			case sysmsg.Kill:
 				// in result of sending a shutdown msg
 				log.Println("supervisor: kill")
 			case sysmsg.Normal:
-				name, dead, found := state.registry.id(msg.Who.(pid.PID))
+				name, dead, found := state.registry.id(msg.Who)
 				if dead || !found {
 					return true
 				}
@@ -73,7 +69,7 @@ func supervisor(supervisor *actor.Actor) {
 				case spec.RestartAlways:
 					applyRestartStrategy(state, name, msg)
 				case spec.RestartNever, spec.RestartTransient:
-					state.deadAndUnlink(msg.Who.(pid.PID))
+					state.deadAndUnlink(msg.Who)
 				}
 			}
 		case sysmsg.Shutdown:
@@ -94,7 +90,7 @@ func supervisor(supervisor *actor.Actor) {
 func applyRestartStrategy(state *state, name string, msg sysmsg.Exit) {
 	switch state.options.Strategy {
 	case OneForOneStrategy:
-		state.handleOneForOne(name, msg.Who.(pid.PID))
+		state.handleOneForOne(name, msg.Who)
 	case OneForAllStrategy:
 		state.handleOneForAll(name)
 	case RestForOneStrategy:

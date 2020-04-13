@@ -1,33 +1,46 @@
 package pid
 
 import (
-	"github.com/hedisam/goactor/internal/mailbox"
+	"context"
+	"github.com/rs/xid"
 )
 
-type PID interface {
-	Mailbox() mailbox.Mailbox
-
-	// ShutdownFn() returns a function that can be used to close the context's done channel.
-	// used by supervisor when shutting down an actor
-	ShutdownFn() func()
-	SetShutdownFn(fn func())
-
-	// default actor type is "child", but it could be a supervisor too.
-	SetActorTypeFn(fn func(int32))
-	ActorTypeFn() func(int32)
-
-	SetSupervisorFn(fn func(pid PID))
-	SupervisorFn() func(pid PID)
+type MailboxWriter interface {
+	SendUserMessage(message interface{})
+	SendSystemMessage(message interface{})
+	Dispose()
 }
 
-type ProtectedPID struct {
-	pid PID
+type BasePID struct {
+	MailboxWriter
+	id string
 }
 
-func NewProtectedPID(pid PID) *ProtectedPID {
-	return &ProtectedPID{pid: pid}
+func NewFuturePID(mailbox MailboxWriter) *BasePID {
+	return &BasePID{
+		MailboxWriter: mailbox,
+		id:            xid.New().String(),
+	}
 }
 
-func ExtractPID(ppid *ProtectedPID) PID {
-	return ppid.pid
+func (pid *BasePID) ID() string {
+	return pid.id
+}
+
+type PID struct {
+	BasePID
+	cancel context.CancelFunc
+}
+
+func NewPID(mailbox MailboxWriter, cancel context.CancelFunc) *PID {
+	return &PID{
+		BasePID: *NewFuturePID(mailbox),
+		cancel:  cancel,
+	}
+}
+
+// Shutdown closes the done channel of actor's context.Context object by calling its cancel function
+// used by supervisor
+func (pid *PID) Shutdown() {
+	pid.cancel()
 }

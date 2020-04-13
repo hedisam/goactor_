@@ -1,9 +1,5 @@
 package mailbox
 
-import (
-	"time"
-)
-
 const (
 	defaultUserMailboxCap = 100
 	defaultSysMailboxCap  = 10
@@ -14,23 +10,9 @@ const (
 	mailboxIdle
 )
 
-type Mailbox interface {
-	SendUserMessage(message interface{})
-	SendSystemMessage(message interface{})
-	Receive(handler MessageHandler)
-	ReceiveWithTimeout(d time.Duration, handler MessageHandler)
-	Dispose()
-	Utils() *ActorUtils
-}
-
-type ActorUtils struct {
-	MonitoredBy func(pid interface{})
-	DemonitorBy func(pid interface{})
-	Link        func(pid interface{})
-	Unlink      func(pid interface{})
-	Self        func() (pid interface{})
-	TrapExit    func() bool
-	ContextDone	func() <-chan struct{}
+type systemMessageHandler interface {
+	HandleSystemMessage(message interface{}) (passToUser bool, msg interface{})
+	CheckUnhandledShutdown()
 }
 
 type MessageHandler func(message interface{}) (loop bool)

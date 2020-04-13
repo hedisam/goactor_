@@ -3,7 +3,6 @@ package supervisor
 import (
 	"fmt"
 	"github.com/hedisam/goactor/actor"
-	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/supervisor/spec"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
@@ -25,15 +24,15 @@ func newState(specs spec.SpecsMap, options *Options, supervisor *actor.Actor) *s
 	}
 }
 
-func (state *state) shutdown(name string, _pid pid.PID) {
+func (state *state) shutdown(name string, pid spec.CancelablePID) {
 	// note: do not call deadAndUnlink if we're supposed to receive shutdown feedback
-	state.deadAndUnlink(_pid)
+	state.deadAndUnlink(pid)
 
-	actor.Send(pid.NewProtectedPID(_pid), sysmsg.Shutdown{
-		Parent:   pid.ExtractPID(state.supervisor.Self()),
+	actor.Send(pid, sysmsg.Shutdown{
+		Parent:   state.supervisor.Self(),
 		Shutdown: state.specs.Shutdown(name),
 	})
-	_pid.ShutdownFn()()
+	pid.Shutdown()
 }
 
 func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
@@ -41,12 +40,12 @@ func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
 	// note: calling panic in supervisor should kill its children since they are linked but we're explicitly
 	// shutting down each one to close child's context's done channel
 	reg := copyMap(state.registry.aliveActors)
-	for _pid, id := range reg {
-		state.shutdown(id, _pid)
+	for pid, id := range reg {
+		state.shutdown(id, pid)
 	}
 
 	panic(sysmsg.Exit{
-		Who:      pid.ExtractPID(state.supervisor.Self()),
+		Who:      state.supervisor.Self(),
 		Parent:   nil,
 		Reason:   reason,
 		Relation: sysmsg.Linked,
@@ -56,36 +55,37 @@ func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
 func (state *state) spawn(name string) error {
 	if state.registry.reachedMaxRestarts(name) {
 		log.Println("[!] supervisor reached max restarts")
-		state.shutdownSupervisor(sysmsg.Reason{
-			Type:    sysmsg.SupMaxRestart,
-			Details: "one of supervisor's children reached its max allowed restarts ",
-		})
+		state.shutdownSupervisor(
+			sysmsg.Reason{
+				Type:    sysmsg.SupMaxRestart,
+				Details: "one of supervisor's children reached its max allowed restarts",
+			},
+		)
 	}
 
-	var ppid *pid.ProtectedPID
+	var pid spec.CancelablePID
 	switch state.specs.Type(name) {
-	case spec.TypeWorker:
+	case spec.WorkerActor:
 		start := state.specs.WorkerStartSpec(name)
-		ppid = state.supervisor.SpawnLink(start.ActorFunc, start.Args...)
-	case spec.TypeSupervisor:
+		pid = state.supervisor.SpawnLink(start.ActorFunc, start.Args...)
+	case spec.SupervisorActor:
 		startLink := state.specs.SupervisorStartLink(name)
 		supRef, err := startLink(state.specs.SupervisorChildren(name)...)
 		if err != nil {return err}
-		ppid = supRef.PPID
-		state.supervisor.Link(ppid)
+		pid = supRef.PID
+		state.supervisor.Link(pid)
 	default:
 		log.Fatal("invalid spec type when spawning child")
 	}
-	_pid := pid.ExtractPID(ppid)
 
 	// tell the new spawned actor (worker/supervisor) that it has a supervisor
-	setSupervisor := _pid.SupervisorFn()
-	setSupervisor(pid.ExtractPID(state.supervisor.Self()))
+	setSupervisor := pid.SupervisorFn()
+	setSupervisor(state.supervisor.Self())
 
 	// register locally
-	state.registry.put(_pid, name)
+	state.registry.put(pid, name)
 	// register globally
-	actor.Register(name, ppid)
+	process.Register(name, pid)
 	return nil
 }
 
@@ -115,20 +115,20 @@ func (state *state) handleOneForAll(name string) {
 	}
 }
 
-func (state *state) handleOneForOne(name string, _pid pid.PID) {
+func (state *state) handleOneForOne(name string, _pid spec.CancelablePID) {
 	// we need to unlink the terminated actor and declare it dead
 	state.deadAndUnlink(_pid)
 	// re-spawn
 	_ = state.spawn(name)
 }
 
-func (state *state) handleRestForOne(name string) {
+func (state *state) handleRestForOne(_ string) {
 	log.Println("supervisor: rest_for_one Strategy")
 }
 
-func (state *state) deadAndUnlink(_pid pid.PID) {
-	state.registry.dead(_pid)
-	state.supervisor.Unlink(pid.NewProtectedPID(_pid))
+func (state *state) deadAndUnlink(pid spec.CancelablePID) {
+	state.registry.dead(pid)
+	state.supervisor.Unlink(pid)
 }
 
 func (state *state) handleCall(call spec.Call) bool {
@@ -137,7 +137,7 @@ func (state *state) handleCall(call spec.Call) bool {
 		request.Specs = len(state.specs)
 		request.Active = len(state.registry.aliveActors)
 		for id := range state.specs {
-			if state.specs.Type(id) == spec.TypeSupervisor {
+			if state.specs.Type(id) == spec.SupervisorActor {
 				request.Supervisors++
 			} else {
 				request.Workers++
@@ -230,12 +230,12 @@ func (state *state) handleCall(call spec.Call) bool {
 		state.shutdown(request.Id, _pid)
 		actor.Send(call.Sender, spec.OK{})
 	case spec.WithChildren:
-		getPID := func(id string) *pid.ProtectedPID {
-			_pid, ok := state.registry.alivePID(id)
+		getPID := func(id string) spec.CancelablePID {
+			pid, ok := state.registry.alivePID(id)
 			if !ok {
 				return nil
 			}
-			return pid.NewProtectedPID(_pid)
+			return pid
 		}
 		info := make([]spec.ChildInfo, 0, len(state.specs))
 		for id := range state.specs {
@@ -253,8 +253,8 @@ func (state *state) handleCall(call spec.Call) bool {
 }
 
 
-func copyMap(src map[pid.PID]string) (dst map[pid.PID]string) {
-	dst = make(map[pid.PID]string)
+func copyMap(src map[spec.CancelablePID]string) (dst map[spec.CancelablePID]string) {
+	dst = make(map[spec.CancelablePID]string)
 	for k, v := range src {
 		dst[k] = v
 	}

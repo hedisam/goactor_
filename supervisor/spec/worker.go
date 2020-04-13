@@ -40,5 +40,5 @@ func (w WorkerSpec) SetShutdown(shutdown int32) WorkerSpec {
 }
 
 func (w WorkerSpec) Type() ChildType {
-	return TypeWorker
+	return WorkerActor
 }

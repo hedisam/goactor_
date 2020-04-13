@@ -2,17 +2,14 @@ package spec
 
 import (
 	"fmt"
-	"github.com/hedisam/goactor/internal/pid"
 )
-
-type Error error
 
 func errInvalidResponse(resp interface{}) error {
 	return fmt.Errorf("invalid response sent by supervisor: %v", resp)
 }
 
 type Call struct {
-	Sender *pid.ProtectedPID
+	Sender BasicPID
 	Request interface{}
 }
 

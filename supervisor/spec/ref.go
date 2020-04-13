@@ -2,11 +2,11 @@ package spec
 
 import (
 	"github.com/hedisam/goactor/actor"
-	"github.com/hedisam/goactor/internal/pid"
+	"time"
 )
 
 type SupRef struct {
-	PPID *pid.ProtectedPID
+	PID CancelablePID
 }
 
 func (r *SupRef) CountChildren() (count CountChildren, err error) {
@@ -60,8 +60,11 @@ func (r *SupRef) WithChildren() (childrenInfo WithChildren, err error) {
 
 func (r *SupRef) call(request interface{}) (interface{}, error) {
 	future := actor.NewFutureActor()
-	future.Send(r.PPID, request)
-	result, err := future.Recv()
+	actor.Send(r.PID, Call{
+		Sender:  future.Self(),
+		Request: request,
+	})
+	result, err := future.ReceiveWithTimeout(1 * time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +72,7 @@ func (r *SupRef) call(request interface{}) (interface{}, error) {
 	switch result := result.(type) {
 	case OK:
 		return nil, nil
-	case Error:
+	case error:
 		return nil, result
 	default:
 		// call specific response

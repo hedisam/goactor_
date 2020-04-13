@@ -44,5 +44,5 @@ func (sup SupervisorSpec) SetShutdown(shutdown int32) SupervisorSpec {
 }
 
 func (sup SupervisorSpec) Type() ChildType {
-	return TypeSupervisor
+	return SupervisorActor
 }

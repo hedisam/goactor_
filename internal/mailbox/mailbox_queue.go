@@ -14,23 +14,22 @@ type queueMailbox struct {
 	done        chan struct{}
 	status      int32
 	signal      chan struct{}
-	utils       *ActorUtils
+	systemHandler systemMessageHandler
 }
 
-func DefaultRingBufferQueueMailbox(utils *ActorUtils) Mailbox {
+func DefaultRingBufferQueueMailbox() *queueMailbox {
 	m := queueMailbox{
 		userMailbox: queue.NewRingBuffer(defaultUserMailboxCap),
 		sysMailbox:  queue.NewRingBuffer(defaultSysMailboxCap),
 		done:        make(chan struct{}),
 		status:      mailboxIdle,
 		signal:      make(chan struct{}, 10),
-		utils:       utils,
 	}
 	return &m
 }
 
-func (m *queueMailbox) Utils() *ActorUtils {
-	return m.utils
+func (m *queueMailbox) SetSystemMessageHandler(systemHandler systemMessageHandler) {
+	m.systemHandler = systemHandler
 }
 
 func (m *queueMailbox) SendUserMessage(message interface{}) {
@@ -57,9 +56,9 @@ func (m *queueMailbox) SendSystemMessage(message interface{}) {
 	m.SendUserMessage(message)
 }
 
-func (m *queueMailbox) Receive(handler MessageHandler) {
+func (m *queueMailbox) Receive(handler func(message interface{}) (loop bool)) {
 	// todo: handle sys messages separately
-	defer checkContext(m)
+	defer m.systemHandler.CheckUnhandledShutdown()
 listen:
 	select {
 	case <-m.done:
@@ -69,7 +68,7 @@ listen:
 			msg, _ := m.userMailbox.Get()
 			switch msg.(type) {
 			case sysmsg.SystemMessage:
-				pass, msg := handleSystemMessage(m, msg)
+				pass, msg := m.systemHandler.HandleSystemMessage(msg)
 				if pass {
 					keepOn := handler(msg)
 					if !keepOn {
@@ -90,8 +89,8 @@ listen:
 	}
 }
 
-func (m *queueMailbox) ReceiveWithTimeout(d time.Duration, handler MessageHandler) {
-	defer checkContext(m)
+func (m *queueMailbox) ReceiveWithTimeout(d time.Duration, handler func(message interface{}) (loop bool)) {
+	defer m.systemHandler.CheckUnhandledShutdown()
 	timer := time.NewTimer(d)
 listen:
 	select {
@@ -102,7 +101,7 @@ listen:
 			msg, _ := m.userMailbox.Get()
 			switch msg.(type) {
 			case sysmsg.SystemMessage:
-				pass, msg := handleSystemMessage(m, msg)
+				pass, msg := m.systemHandler.HandleSystemMessage(msg)
 				if pass {
 					keepOn := handler(msg)
 					if !keepOn {

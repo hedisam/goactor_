@@ -1,61 +1,57 @@
 package mailbox
 
 import (
+	"fmt"
 	"github.com/hedisam/goactor/sysmsg"
 	"time"
 )
 
-type ErrDisposed string
+var ErrDisposed = fmt.Errorf("mailbox's channel is closed")
 
-type future struct {
+type FutureMailbox struct {
 	m chan interface{}
 	done chan struct{}
 }
 
-func NewFutureMailbox() *future {
-	return &future{
+func NewFutureMailbox() *FutureMailbox {
+	return &FutureMailbox{
 		m:    make(chan interface{}, 1),
 		done: make(chan struct{}),
 	}
 }
 
-func (f *future) SendUserMessage(message interface{}) {
+func (f *FutureMailbox) SendUserMessage(message interface{}) {
 	select {
 	case <-f.done:
 	case f.m<- message:
 	}
 }
 
-func (f *future) SendSystemMessage(message interface{}) {
+func (f *FutureMailbox) SendSystemMessage(message interface{}) {
 	f.SendUserMessage(message)
 }
 
-func (f *future) Receive(handler MessageHandler) {
+func (f *FutureMailbox) Receive(handler func(message interface{}) (loop bool)) {
 	select {
 	case msg := <-f.m:
 		handler(msg)
 	case <-f.done:
-		handler(ErrDisposed("mailbox's channel is closed"))
+		handler(ErrDisposed)
 	}
 }
 
-func (f *future) ReceiveWithTimeout(d time.Duration, handler MessageHandler) {
+func (f *FutureMailbox) ReceiveWithTimeout(d time.Duration, handler func(message interface{}) (loop bool)) {
 	select {
 	case msg := <-f.m:
 		handler(msg)
 	case <-time.After(d):
 		handler(sysmsg.Timeout{})
 	case <-f.done:
-		handler(ErrDisposed("mailbox's channel is closed"))
+		handler(ErrDisposed)
 	}
 }
 
-func (f *future) Dispose() {
+func (f *FutureMailbox) Dispose() {
 	close(f.done)
-}
-
-// Utils returns nil. DO NOT call me
-func (f *future) Utils() *ActorUtils {
-	return nil
 }
 
