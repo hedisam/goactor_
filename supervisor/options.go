@@ -59,7 +59,7 @@ func (opt Options) SetName(name string) Options {
 	return opt
 }
 
-func (opt *Options) checkOptions() error {
+func (opt *Options) validate() error {
 	if opt.Name == "" {
 		return fmt.Errorf("invalid supervisor Name: %s", opt.Name)
 	} else if opt.Strategy < 0 || opt.Strategy > 2 {

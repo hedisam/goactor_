@@ -2,6 +2,9 @@ package supervisor
 
 import (
 	"github.com/hedisam/goactor/actor"
+	"github.com/hedisam/goactor/internal/context"
+	"github.com/hedisam/goactor/internal/mailbox"
+	"github.com/hedisam/goactor/internal/pid"
 	"github.com/hedisam/goactor/supervisor/spec"
 	"github.com/hedisam/goactor/sysmsg"
 	"log"
@@ -10,34 +13,45 @@ import (
 type initMsg struct {sender spec.BasicPID}
 
 func Start(options Options, specs ...spec.Spec) (*spec.SupRef, error) {
-	specsMap, err := spec.ToMap(specs...)
+	specsMap, err := toMap(specs...)
 	if err != nil {
 		return nil, err
 	}
 
-	err = options.checkOptions()
+	err = options.validate()
 	if err != nil {return nil, err}
 
-	// spawn supervisor actor passing spec data and options as arguments
-	suPID := actor.Spawn(supervisor, specsMap, &options)
+	supPID := createSupervisor(specsMap, options)
 
 	// wait till all spec are spawned
 	future := actor.NewFutureActor()
-	actor.Send(suPID, initMsg{sender: future.Self()})
+	actor.Send(supPID, initMsg{sender: future.Self()})
 	initErr, err := future.Receive()
-	if err != nil {return nil, err}
-	if initErr != nil {return nil, initErr.(error)}
+	if err != nil {
+		return nil, err
+	}
+	if initErr != nil {
+		return nil, initErr.(error)
+	}
 
-	return &spec.SupRef{PID: suPID}, nil
+	return &spec.SupRef{PID: supPID}, nil
 }
 
-func supervisor(supervisor *actor.Actor) {
-	// set trap exit since the supervisor is linked to its children
-	supervisor.TrapExit(true)
+func createSupervisor(specsMap specsMap, options Options) *pid.PID {
+	// create and spawn a supervisor actor
+	m := mailbox.DefaultRingBufferQueueMailbox()
+	ctx, cancelFunc := context.NewContext(m, []interface{}{specsMap, options})
+	supPID := pid.NewPID(m, cancelFunc)
+	sup := actor.NewSupervisorActor(ctx, supPID)
+	sup.SpawnMe(supervisor)
+	return supPID
+}
 
-	specs := supervisor.Args()[0].(spec.SpecsMap)
-	options := supervisor.Args()[1].(*Options)
-	state := newState(specs, options, supervisor)
+func supervisor(supervisor *actor.SupervisorActor) {
+	specs := supervisor.Args()[0].(specsMap)
+	options := supervisor.Args()[1].(Options)
+
+	state := newState(specs, &options, supervisor)
 
 	supervisor.Receive(func(message interface{}) (loop bool) {
 		switch msg := message.(type) {
@@ -51,7 +65,7 @@ func supervisor(supervisor *actor.Actor) {
 				if dead || !found {
 					return true
 				}
-				switch state.specs.Restart(name) {
+				switch state.specs[name].RestartValue() {
 				case spec.RestartAlways, spec.RestartTransient:
 					applyRestartStrategy(state, name, msg)
 				case spec.RestartNever:
@@ -65,7 +79,7 @@ func supervisor(supervisor *actor.Actor) {
 				if dead || !found {
 					return true
 				}
-				switch state.specs.Restart(name) {
+				switch state.specs[name].RestartValue() {
 				case spec.RestartAlways:
 					applyRestartStrategy(state, name, msg)
 				case spec.RestartNever, spec.RestartTransient:

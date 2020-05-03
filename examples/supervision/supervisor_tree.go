@@ -9,7 +9,9 @@ import (
 	"time"
 )
 
-type worker struct {}
+type worker struct {
+	id string
+}
 type mySupervisor struct {}
 
 func supervisionTreeMain() {
@@ -24,19 +26,20 @@ func supervisionTreeMain() {
 	actor.SendNamed("worker", "your supervisor should've been restarted")
 }
 
-func (sup mySupervisor) ChildSpec() spec.Spec {
-	return spec.NewSupervisorSpec(sup.StartLink, worker{})
+func (sup mySupervisor) ChildSpec() spec.ChildSpec {
+	return spec.NewSupervisorSpec(sup.StartLink, worker{"worker"}, worker{"worker2"})
 }
 
 func (sup mySupervisor) StartLink(specs ...spec.Spec) (*spec.SupRef, error) {
 	fmt.Println("[+] start_link invoked")
 	return supervisor.Start(
-		supervisor.NewOptions(supervisor.OneForOneStrategy, 1, 2),
-		specs...)
+			supervisor.NewOptions(supervisor.OneForOneStrategy, 1, 2),
+			specs...
+		)
 }
 
-func (w worker) ChildSpec() spec.Spec {
-	return spec.NewWorkerSpec("worker", w.work)
+func (w worker) ChildSpec() spec.ChildSpec {
+	return spec.NewWorkerSpec(w.id, w.work)
 }
 
 func (w worker) work(actor *actor.Actor) {

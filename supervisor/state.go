@@ -9,13 +9,13 @@ import (
 )
 
 type state struct {
-	specs      spec.SpecsMap
+	specs      specsMap
 	options    *Options
 	registry   *registry
-	supervisor *actor.Actor
+	supervisor *actor.SupervisorActor
 }
 
-func newState(specs spec.SpecsMap, options *Options, supervisor *actor.Actor) *state {
+func newState(specs specsMap, options *Options, supervisor *actor.SupervisorActor) *state {
 	return &state{
 		specs: specs,
 		options: options,
@@ -24,13 +24,13 @@ func newState(specs spec.SpecsMap, options *Options, supervisor *actor.Actor) *s
 	}
 }
 
-func (state *state) shutdown(name string, pid spec.CancelablePID) {
+func (state *state) shutdown(pid spec.CancelablePID) {
 	// note: do not call deadAndUnlink if we're supposed to receive shutdown feedback
 	state.deadAndUnlink(pid)
 
 	actor.Send(pid, sysmsg.Shutdown{
 		Parent:   state.supervisor.Self(),
-		Shutdown: state.specs.Shutdown(name),
+		Shutdown: 0,
 	})
 	pid.Shutdown()
 }
@@ -40,15 +40,14 @@ func (state *state) shutdownSupervisor(reason sysmsg.Reason) {
 	// note: calling panic in supervisor should kill its children since they are linked but we're explicitly
 	// shutting down each one to close child's context's done channel
 	reg := copyMap(state.registry.aliveActors)
-	for pid, id := range reg {
-		state.shutdown(id, pid)
+	for pid := range reg {
+		state.shutdown(pid)
 	}
 
 	panic(sysmsg.Exit{
 		Who:      state.supervisor.Self(),
 		Parent:   nil,
 		Reason:   reason,
-		Relation: sysmsg.Linked,
 	})
 }
 
@@ -64,12 +63,13 @@ func (state *state) spawn(name string) error {
 	}
 
 	var pid spec.CancelablePID
-	switch state.specs.Type(name) {
-	case spec.WorkerActor:
-		start := state.specs.WorkerStartSpec(name)
+	s := state.specs[name]
+	switch s := state.specs[name].(type) {
+	case spec.WorkerSpec:
+		start := s.Start
 		pid = state.supervisor.SpawnLink(start.ActorFunc, start.Args...)
-	case spec.SupervisorActor:
-		startLink := state.specs.SupervisorStartLink(name)
+	case spec.SupervisorSpec:
+		startLink := s.StartLink
 		supRef, err := startLink(state.specs.SupervisorChildren(name)...)
 		if err != nil {return err}
 		pid = supRef.PID
@@ -109,15 +109,15 @@ func (state *state) handleOneForAll(name string) {
 			// but we need to unlink and declare it dead
 			state.deadAndUnlink(_pid)
 		} else {
-			state.shutdown(id, _pid)
+			state.shutdown(_pid)
 		}
 		_ = state.spawn(id)
 	}
 }
 
-func (state *state) handleOneForOne(name string, _pid spec.CancelablePID) {
+func (state *state) handleOneForOne(name string, pid spec.BasicPID) {
 	// we need to unlink the terminated actor and declare it dead
-	state.deadAndUnlink(_pid)
+	state.deadAndUnlink(pid)
 	// re-spawn
 	_ = state.spawn(name)
 }
@@ -126,9 +126,9 @@ func (state *state) handleRestForOne(_ string) {
 	log.Println("supervisor: rest_for_one Strategy")
 }
 
-func (state *state) deadAndUnlink(pid spec.CancelablePID) {
+func (state *state) deadAndUnlink(pid spec.BasicPID) {
 	state.registry.dead(pid)
-	state.supervisor.Unlink(pid)
+	state.supervisor.UnlinkDeadChild(pid)
 }
 
 func (state *state) handleCall(call spec.Call) bool {
@@ -210,7 +210,7 @@ func (state *state) handleCall(call spec.Call) bool {
 		// shutdown children
 		reg := copyMap(state.registry.aliveActors)
 		for _pid, id := range reg {
-			state.shutdown(id, _pid)
+			state.shutdown(_pid)
 		}
 		actor.Send(call.Sender, spec.OK{})
 		return false
@@ -227,7 +227,7 @@ func (state *state) handleCall(call spec.Call) bool {
 			actor.Send(call.Sender, fmt.Errorf("child already has been terminated"))
 			return true
 		}
-		state.shutdown(request.Id, _pid)
+		state.shutdown(_pid)
 		actor.Send(call.Sender, spec.OK{})
 	case spec.WithChildren:
 		getPID := func(id string) spec.CancelablePID {

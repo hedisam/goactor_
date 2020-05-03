@@ -1,7 +1,18 @@
 package spec
 
 type Spec interface {
-	ChildSpec() Spec
+	ChildSpec() ChildSpec
+}
+
+type ChildSpec interface {
+	ID() string
+	Validate() error
+	RestartValue() int32
+	Start(supervisor linkSpawner) (error, CancelablePID)
+}
+
+type linkSpawner interface {
+	SpawnLink() CancelablePID
 }
 
 type ChildType int32
@@ -9,11 +20,11 @@ type ChildType int32
 type ChildInfo struct {
 	Id   string
 	PID  CancelablePID
-	Type ChildType
+	Type int32
 }
 
 const (
-	WorkerActor ChildType = iota
+	WorkerActor int32 = iota
 	SupervisorActor
 )
 

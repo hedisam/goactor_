@@ -25,7 +25,7 @@ func newRegistry(ops *Options) *registry {
 }
 
 // id returns the id associated with a pid. dead is true if the actor has been shutdown by supervisor.
-func (r *registry) id(pid spec.CancelablePID) (id string, dead, found bool) {
+func (r *registry) id(pid spec.BasicPID) (id string, dead, found bool) {
 	id, found = r.aliveActors[pid]
 	if !found {
 		id, found = r.deadActors[pid]
@@ -57,7 +57,7 @@ func (r *registry) put(pid spec.CancelablePID, id string) {
 	r.timeTracer[id] = append(restarts, time.Now().Unix())
 }
 
-// dead declares an actor dead by its pid
+// dead deletes an actor from the aliveActors map
 func (r *registry) dead(pid spec.CancelablePID) {
 	id, found := r.aliveActors[pid]
 	if !found {

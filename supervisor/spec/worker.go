@@ -1,6 +1,7 @@
 package spec
 
 import (
+	"fmt"
 	"github.com/hedisam/goactor/actor"
 )
 
@@ -25,7 +26,7 @@ func NewWorkerSpec(name string, fn actor.Func, args ...interface{}) WorkerSpec {
 	}
 }
 
-func (w WorkerSpec) ChildSpec() Spec {
+func (w WorkerSpec) ChildSpec() WorkerSpec {
 	return w
 }
 
@@ -39,6 +40,27 @@ func (w WorkerSpec) SetShutdown(shutdown int32) WorkerSpec {
 	return w
 }
 
-func (w WorkerSpec) Type() ChildType {
+func (w WorkerSpec) Type() int32 {
 	return WorkerActor
+}
+
+func (w WorkerSpec) RestartValue() int32 {
+	return w.Restart
+}
+
+func (w WorkerSpec) ID() string {
+	return w.Id
+}
+
+func (w WorkerSpec) Validate() error {
+	if w.Id == "" {
+		return fmt.Errorf("childspec's id could not be empty")
+	} else if w.Restart != RestartAlways && w.Restart != RestartTransient && w.Restart != RestartNever {
+		return fmt.Errorf("invalid childspec's restart value: %v, id %s", w.Restart, w.Id)
+	} else if w.Shutdown < ShutdownInfinity {
+		return fmt.Errorf("invalid childspec's shutdown value: %v, id %s", w.Shutdown, w.Id)
+	} else if w.Start.ActorFunc == nil {
+		return fmt.Errorf("childspec's fn (actor.Func(actor.Actor)) could not be nil, id %s", w.Id)
+	}
+	return nil
 }
